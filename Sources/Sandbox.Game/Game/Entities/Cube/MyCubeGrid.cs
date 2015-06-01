@@ -47,6 +47,7 @@ using Sandbox.ModAPI.Interfaces;
 using Sandbox.Game.Localization;
 using Havok;
 using VRage.Library.Utils;
+using Sandbox.Common.ModAPI;
 
 #endregion
 
@@ -245,35 +246,6 @@ namespace Sandbox.Game.Entities
             if (OnGridChanged != null)
             {
                 OnGridChanged(this);
-            }
-        }
-
-        /// <summary>
-        /// Returns total blocks count in the grid including blocks in compound block.
-        /// RKTODO - change to int member
-        /// </summary>
-        public int TotalBlocksCount
-        {
-            get
-            {
-                if (MyFakes.ENABLE_COMPOUND_BLOCKS)
-                {
-                    int count = 0;
-                    foreach (var block in m_cubeBlocks)
-                    {
-                        MyCompoundCubeBlock compoundBlock = block.FatBlock as MyCompoundCubeBlock;
-                        if (compoundBlock != null)
-                            count += compoundBlock.GetBlocksCount();
-                        else
-                            count += 1;
-                    }
-
-                    return count;
-                }
-                else
-                {
-                    return m_cubeBlocks.Count;
-                }
             }
         }
 
@@ -493,6 +465,8 @@ namespace Sandbox.Game.Entities
                     Physics.AngularVelocity = builder.AngularVelocity;
                     if (!IsStatic)
                         Physics.Shape.BlocksConnectedToWorld.Clear();
+                    if(MyPerGameSettings.InventoryMass)
+                        m_inventoryMassDirty = true;
                 }
 
                 XSymmetryPlane = builder.XMirroxPlane;
@@ -906,10 +880,12 @@ namespace Sandbox.Game.Entities
             {
                 SyncObject.SendCloseRequest();
             }
+
             if (Physics != null)
             {
                 Physics.UpdateShape();
             }
+
             ProfilerShort.End();
         }
 
@@ -1054,20 +1030,16 @@ namespace Sandbox.Game.Entities
 
             if (Sync.IsServer)
             {
-                if (m_fractureBlocksCache.Count > 0)
+                if (Physics != null && Physics.GetFracturedBlocks().Count > 0)
                 {
                     EnableGenerators(false);
-                    foreach (var info in m_fractureBlocksCache)
+                    foreach (var info in Physics.GetFracturedBlocks())
                     {
                         CreateFracturedBlock(info);
                     }
                     EnableGenerators(true);
                 }
             }
-
-           
-            m_fractureBlocksCache.Clear();
-
 
             StepStructuralIntegrity();
 
@@ -1082,14 +1054,14 @@ namespace Sandbox.Game.Entities
 
             DoLazyUpdates();
 
-            if(m_inventoryMassDirty)
-            {
-                m_inventoryMassDirty = false;
-                Physics.Shape.UpdateMassFromInventories(m_cubeBlocks, Physics);
-            }
-
             if (Physics != null)
             {
+                if (m_inventoryMassDirty)
+                {
+                    m_inventoryMassDirty = false;
+                    Physics.Shape.UpdateMassFromInventories(m_cubeBlocks, Physics);
+                }
+
                 if (IsStatic == false)
                 {
                     Vector3 gravity = MyGravityProviderSystem.CalculateGravityInPointForGrid(PositionComp.GetPosition());
@@ -2529,7 +2501,7 @@ namespace Sandbox.Game.Entities
 
                             if (MyFakes.ENABLE_SMALL_BLOCK_TO_LARGE_STATIC_CONNECTIONS && m_enableSmallToLargeConnections)
                             {
-                                MyCubeGridSmallToLargeConnection.Static.CheckBlockSmallToLargeDisconnect(blockToRemove);
+                                MyCubeGridSmallToLargeConnection.Static.RemoveBlockSmallToLargeConnection(blockToRemove);
                             }
 
                             if (OnBlockRemoved != null)
@@ -2574,7 +2546,7 @@ namespace Sandbox.Game.Entities
 
                             if (MyFakes.ENABLE_SMALL_BLOCK_TO_LARGE_STATIC_CONNECTIONS && m_enableSmallToLargeConnections)
                             {
-                                MyCubeGridSmallToLargeConnection.Static.CheckBlockSmallToLargeDisconnect(blockToRemove);
+                                MyCubeGridSmallToLargeConnection.Static.RemoveBlockSmallToLargeConnection(blockToRemove);
                             }
 
                             if (OnBlockRemoved != null)
@@ -2707,7 +2679,7 @@ namespace Sandbox.Game.Entities
                 }
 
                 if (MyFakes.ENABLE_SMALL_BLOCK_TO_LARGE_STATIC_CONNECTIONS && m_enableSmallToLargeConnections)
-                    MyCubeGridSmallToLargeConnection.Static.CheckBlockSmallToLargeConnect(block);
+                    MyCubeGridSmallToLargeConnection.Static.AddBlockSmallToLargeConnection(block);
             }
 
             ProfilerShort.End();
@@ -3029,11 +3001,36 @@ namespace Sandbox.Game.Entities
             RaisePhysicsChanged();
         }
 
-        public void ApplyDestructionDeformation(MySlimBlock block, float damage = 1f)
+        public void DoDamage(float damage, MyHitInfo hitInfo, Vector3? localPos = null)
         {
-            Debug.Assert(Sandbox.Game.Multiplayer.Sync.IsServer, "ApplyDestructionDeformation is supposed to be only server method");
-            SyncObject.EnqueueDestructionDeformationBlock(block.Position);
-            ApplyDestructionDeformationInternal(block, true, damage);
+            Debug.Assert(Sync.IsServer);
+            Vector3I cubePos;
+            if (localPos.HasValue)
+                FixTargetCube(out cubePos, localPos.Value / GridSize);
+            else
+                FixTargetCube(out cubePos, Vector3D.Transform(hitInfo.Position, PositionComp.WorldMatrixInvScaled) / GridSize);
+
+            var cube = GetCubeBlock(cubePos);
+            //Debug.Assert(cube != null, "Cannot find block for damage!");
+            if (cube != null)
+            {
+                ApplyDestructionDeformation(cube, damage, hitInfo);
+            }
+        }
+
+        public void ApplyDestructionDeformation(MySlimBlock block, float damage = 1f, MyHitInfo? hitInfo = null)
+        {
+            if (MyPerGameSettings.Destruction)
+            {
+                Debug.Assert(hitInfo.HasValue, "Destruction needs additional info");
+                (block as IMyDestroyableObject).DoDamage(damage, MyDamageType.Unknown, true, hitInfo);
+            }
+            else
+            {
+                Debug.Assert(Sandbox.Game.Multiplayer.Sync.IsServer, "ApplyDestructionDeformation is supposed to be only server method");
+                SyncObject.EnqueueDestructionDeformationBlock(block.Position);
+                ApplyDestructionDeformationInternal(block, true, damage);
+            }
         }
 
         private float ApplyDestructionDeformationInternal(MySlimBlock block, bool sync, float damage = 1f)
@@ -3255,6 +3252,8 @@ namespace Sandbox.Game.Entities
                 return;
             }
 
+            RenderData.RemoveDecals(block.Position);
+
             ProfilerShort.Begin("Remove terminal block");
             var terminalBlock = block.FatBlock as MyTerminalBlock;
             if (terminalBlock != null)
@@ -3343,7 +3342,7 @@ namespace Sandbox.Game.Entities
             if (MyFakes.ENABLE_SMALL_BLOCK_TO_LARGE_STATIC_CONNECTIONS && m_enableSmallToLargeConnections)
             {
                 ProfilerShort.Begin("CheckRemovedBlockSmallToLargeConnection");
-                MyCubeGridSmallToLargeConnection.Static.CheckBlockSmallToLargeDisconnect(block);
+                MyCubeGridSmallToLargeConnection.Static.RemoveBlockSmallToLargeConnection(block);
                 ProfilerShort.End();
             }
 
@@ -3929,7 +3928,14 @@ namespace Sandbox.Game.Entities
             //Debug.Assert(this.WorldMatrix.Up == Vector3D.Up && this.WorldMatrix.Forward == Vector3D.Forward, "This grid must have identity rotation");
             //Debug.Assert(gridToMerge.WorldMatrix.Up == Vector3D.Up && gridToMerge.WorldMatrix.Forward == Vector3D.Forward, "Grid to merge must have identity rotation");
 
+           
             gridOffset = Vector3I.Round((gridToMerge.PositionComp.GetPosition() - this.PositionComp.GetPosition()) / GridSize);
+
+            MatrixD otherMatrix = gridToMerge.PositionComp.WorldMatrix.GetOrientation();
+            if (this.PositionComp.WorldMatrix.GetOrientation().EqualsFast(ref otherMatrix) == false)
+            {
+                return false;
+            }
 
             var blockPosInSecondGrid = block.Position - gridOffset;
             Quaternion blockOrientation;
@@ -4309,7 +4315,7 @@ namespace Sandbox.Game.Entities
                     if (added)
                     {
                         if (MyFakes.ENABLE_SMALL_BLOCK_TO_LARGE_STATIC_CONNECTIONS && m_enableSmallToLargeConnections)
-                            MyCubeGridSmallToLargeConnection.Static.CheckBlockSmallToLargeConnect(block);
+                            MyCubeGridSmallToLargeConnection.Static.AddBlockSmallToLargeConnection(block);
 
                         if (OnBlockAdded != null)
                         {
@@ -4387,7 +4393,7 @@ namespace Sandbox.Game.Entities
             if (MyFakes.ENABLE_SMALL_BLOCK_TO_LARGE_STATIC_CONNECTIONS && m_enableSmallToLargeConnections && blockAddSuccessfull)
             {
                 ProfilerShort.Begin("CheckAddedBlockSmallToLargeConnection");
-                MyCubeGridSmallToLargeConnection.Static.CheckBlockSmallToLargeConnect(block);
+                MyCubeGridSmallToLargeConnection.Static.AddBlockSmallToLargeConnection(block);
                 ProfilerShort.End();
             }
 
@@ -4481,7 +4487,7 @@ namespace Sandbox.Game.Entities
         {
             if (MyFakes.ENABLE_SMALL_BLOCK_TO_LARGE_STATIC_CONNECTIONS && m_enableSmallToLargeConnections && !m_smallToLargeConnectionsInitialized)
             {
-                MyCubeGridSmallToLargeConnection.Static.CheckGridSmallToLargeConnect(this);
+                MyCubeGridSmallToLargeConnection.Static.AddGridSmallToLargeConnection(this);
             }
             m_smallToLargeConnectionsInitialized = true;
 
@@ -5179,28 +5185,28 @@ namespace Sandbox.Game.Entities
         [ProtoContract]
         public struct MyBlockLocation
         {
-            [ProtoMember(1)]
+            [ProtoMember]
             public Vector3I Min;
 
-            [ProtoMember(2)]
+            [ProtoMember]
             public Vector3I Max; // Will be obsolete
 
-            [ProtoMember(3)]
+            [ProtoMember]
             public Vector3I CenterPos; // Will be obsolete
 
-            [ProtoMember(4)]
+            [ProtoMember]
             public Quaternion Orientation; // Will be different
 
-            [ProtoMember(5)]
+            [ProtoMember]
             public long EntityId;
 
-            [ProtoMember(6)]
+            [ProtoMember]
             public DefinitionIdBlit BlockDefinition;
 
-            [ProtoMember(7)]
+            [ProtoMember]
             public long Owner;
 
-            [ProtoMember(8)]
+            [ProtoMember]
             public long BuilderEntityId;
 
             public MyBlockLocation(MyDefinitionId blockDefinition, Vector3I min, Vector3I max, Vector3I center, Quaternion orientation, long entityId, long owner, long builder)
@@ -5384,16 +5390,6 @@ namespace Sandbox.Game.Entities
                 }
             }
 
-        }
-
-        public List<MyFracturedBlock.Info> m_fractureBlocksCache = new List<MyFracturedBlock.Info>();
-        internal void AddFractureBlock(MyFracturedBlock.Info info)
-        {
-            System.Diagnostics.Debug.Assert(Sync.IsServer, "Cannot create fractures on clients directly");
-            if (Sync.IsServer)
-            {
-                m_fractureBlocksCache.Add(info);
-            }
         }
 
         public MyFracturedBlock CreateFracturedBlock(MyObjectBuilder_FracturedBlock fracturedBlockBuilder, Vector3I position)

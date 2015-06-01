@@ -449,6 +449,7 @@ namespace VRageRender
                 MyImporterConstants.TAG_BOUNDING_BOX,
                 MyImporterConstants.TAG_BOUNDING_SPHERE,
                 MyImporterConstants.TAG_LODS,
+                MyImporterConstants.TAG_PATTERN_SCALE
             });
             Dictionary<string, object> tagData = importer.GetTagData();
 
@@ -507,6 +508,20 @@ namespace VRageRender
 
                     tanW.W = T.Cross(N).Dot(B) < 0 ? -1 : 1;
                     storedTangents[i] = VF_Packer.PackTangentSignB4(ref tanW);
+                }
+            }
+
+            object patternScale;
+            float PatternScale = 1f;
+            if (tagData.TryGetValue(MyImporterConstants.TAG_PATTERN_SCALE, out patternScale))
+            {
+                PatternScale = (float)patternScale;
+            }
+            if (PatternScale != 1f && texcoords.Length > 0)
+            {
+                for (int i = 0; i < texcoords.Length; ++i )
+                {
+                    texcoords[i] = new HalfVector2(texcoords[i].ToVector2() / PatternScale);
                 }
             }
 
@@ -633,7 +648,8 @@ namespace VRageRender
                         MyRender11.Log.WriteLine(String.Format("Mesh asset {0} has no material in part {1}", file, partIndex));
                     }
 
-                    var matId = MyMeshMaterials1.GetMaterialId(materialDesc, contentPath);
+
+                    var matId = MyMeshMaterials1.GetMaterialId(materialDesc, contentPath, file);
 
                     parts[partIndex] = new MyMeshPartInfo1 
                     {

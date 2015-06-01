@@ -210,6 +210,7 @@ namespace Sandbox.Game.Entities
                 EmitterMethods.Add((MethodsEnum)value, new List<Delegate>());
             EmitterMethods[MethodsEnum.ShouldPlay2D].Add((Func<bool>)IsInTerminal);
             EmitterMethods[MethodsEnum.ShouldPlay2D].Add((Func<bool>)IsControlledEntity);
+            EmitterMethods[MethodsEnum.ShouldPlay2D].Add((Func<bool>)IsBeingWelded);
 
             if (MySession.Static != null && MySession.Static.Settings.RealisticSound && MyFakes.ENABLE_NEW_SOUNDS)
             {
@@ -351,6 +352,20 @@ namespace Sandbox.Game.Entities
             return MyStringId.NullOrEmpty;
         }
 
+        public void PlaySound(byte[] buffer, int size, int sampleRate, float volume = 1, float maxDistance = 0, MySoundDimensions dimension = MySoundDimensions.D3)
+        {
+            CustomMaxDistance = maxDistance;
+            CustomVolume = volume;
+            if (Sound == null)
+                Sound = MyAudio.Static.GetSound(this, sampleRate, 1, dimension);
+            if (Sound != null)
+            {
+                Sound.SubmitBuffer(buffer, size);
+                if (!Sound.IsPlaying)
+                    Sound.StartBuffered();
+            }
+        }
+
         public void PlaySingleSound(MyStringId soundId, /*bool loop = false,*/ bool stopPrevious = false, bool skipIntro = false)
         {
             if (m_cueEnum == soundId)
@@ -467,6 +482,15 @@ namespace Sandbox.Game.Entities
             foreach (var func in EmitterMethods[MethodsEnum.ShouldPlay2D])
                 retVal |= ((Func<bool>)func)();
             return retVal;
+        }
+
+        public void Cleanup()
+        {
+            if (Sound != null)
+            {
+                Sound.Cleanup();
+                Sound = null;
+            }
         }
 
         private void OnStopPlaying()

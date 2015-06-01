@@ -15,10 +15,10 @@ namespace Sandbox.Game.Entities
     [ProtoContract]
     public struct MyStockpileItem
     {
-        [ProtoMember(1)]
+        [ProtoMember]
         public int Amount;
 
-        [ProtoMember(2)]
+        [ProtoMember]
         public MyObjectBuilder_PhysicalObject Content;
 
         public override string ToString()
@@ -27,7 +27,7 @@ namespace Sandbox.Game.Entities
         }
     }
 
-    class MyConstructionStockpile
+    public class MyConstructionStockpile
     {
         private List<MyStockpileItem> m_items = new List<MyStockpileItem>();
         private static List<MyStockpileItem> m_syncItems = new List<MyStockpileItem>();

@@ -15,12 +15,13 @@ using VRage.Library.Utils;
 
 namespace Sandbox.Game.Entities
 {
-    class MyComponentStack
+    public class MyComponentStack
     {
         public struct GroupInfo
         {
             public int MountedCount;
             public int TotalCount;
+			public int AvailableCount;
 
             /// <summary>
             /// Integrity of group, increases when mounting more components
@@ -512,7 +513,7 @@ namespace Sandbox.Game.Entities
 
             // Continue removing components, until the to be removed component's health is larger than unmountAmount
             MyObjectBuilder_Component componentBuilder = null;
-            MyObjectBuilder_Ingot scrapBuilder = Sandbox.Common.ObjectBuilders.Serializer.MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_Ingot>("Scrap");
+            var scrapBuilder = MyFloatingObject.ScrapBuilder;
             while (unmountAmount >= topIntegrity)
             {
                 m_integrity -= topIntegrity;
@@ -604,6 +605,7 @@ namespace Sandbox.Game.Entities
                 Component = component.Definition,
                 TotalCount = component.Count,
                 MountedCount = 0,
+				AvailableCount = 0,
                 Integrity = 0.0f,
                 MaxIntegrity = component.Count * component.Definition.MaxIntegrity,
             };

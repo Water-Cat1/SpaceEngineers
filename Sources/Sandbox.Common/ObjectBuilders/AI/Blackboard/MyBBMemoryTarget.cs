@@ -10,55 +10,68 @@ namespace Sandbox.Common.ObjectBuilders.AI
     [ProtoContract]
     public class MyBBMemoryTarget : MyBBMemoryValue
     {
-        [ProtoMember(1)]
+        [ProtoMember]
         public MyAiTargetEnum TargetType = MyAiTargetEnum.NO_TARGET;
 
-        [ProtoMember(2)]
+        [ProtoMember]
         public long? EntityId = null;
 
-        [ProtoMember(3)]
+        [ProtoMember]
         public Vector3D? Position = null;
 
+		[ProtoMember]
+		public int? TreeId = null;
+
         public Vector3I BlockPosition { get { return Vector3I.Round(Position.Value); } }
+        public Vector3I VoxelPosition { get { return Vector3I.Round(Position.Value); } }
 
         public MyBBMemoryTarget()
         {
         }
 
-        public MyBBMemoryTarget(MyAiTargetEnum targetType, long entityId)
+        public static void SetTargetEntity(ref MyBBMemoryTarget target, MyAiTargetEnum targetType, long entityId, Vector3D? position = null)
         {
-            SetTargetEntity(targetType, entityId);
+            if (target == null) target = new MyBBMemoryTarget();
+            target.TargetType = targetType;
+            target.EntityId = entityId;
+            target.TreeId = null;
+            target.Position = position;
         }
 
-        public MyBBMemoryTarget(Vector3D position)
+        public static void SetTargetPosition(ref MyBBMemoryTarget target, Vector3D position)
         {
-            SetTargetPosition(position);
+            if (target == null) target = new MyBBMemoryTarget();
+            target.TargetType = MyAiTargetEnum.POSITION;
+            target.EntityId = null;
+            target.TreeId = null;
+            target.Position = position;
         }
 
-        public MyBBMemoryTarget(Vector3I blockPosition, long entityId)
+        public static void SetTargetCube(ref MyBBMemoryTarget target, Vector3I blockPosition, long entityId)
         {
-            SetTargetCube(blockPosition, entityId);
+            if (target == null) target = new MyBBMemoryTarget();
+            target.TargetType = MyAiTargetEnum.CUBE;
+            target.EntityId = entityId;
+            target.TreeId = null;
+            target.Position = new Vector3D(blockPosition);
         }
 
-        public void SetTargetEntity(MyAiTargetEnum targetType, long entityId)
+        public static void SetTargetVoxel(ref MyBBMemoryTarget target, Vector3I voxelPosition, long entityId)
         {
-            TargetType = targetType;
-            EntityId = entityId;
-            Position = null;
+            if (target == null) target = new MyBBMemoryTarget();
+            target.TargetType = MyAiTargetEnum.VOXEL;
+            target.EntityId = entityId;
+            target.TreeId = null;
+            target.Position = new Vector3D(voxelPosition);
         }
 
-        public void SetTargetPosition(Vector3D position)
+        public static void SetTargetTree(ref MyBBMemoryTarget target, Vector3D treePosition, long entityId, int treeId)
         {
-            TargetType = MyAiTargetEnum.POSITION;
-            EntityId = null;
-            Position = position;
-        }
-
-        public void SetTargetCube(Vector3I blockPosition, long entityId)
-        {
-            TargetType = MyAiTargetEnum.CUBE;
-            EntityId = entityId;
-            Position = new Vector3D(blockPosition);
-        }
+            if (target == null) target = new MyBBMemoryTarget();
+            target.TargetType = MyAiTargetEnum.ENVIRONMENT_ITEM;
+            target.EntityId = entityId;
+            target.TreeId = treeId;
+            target.Position = treePosition;
+		}
     }
 }

@@ -14,7 +14,6 @@ using VRageRender;
 
 
 using Sandbox.Common;
-using Sandbox.ModAPI.Ingame;
 using VRage;
 using Sandbox.Game.Localization;
 using VRage.Utils;
@@ -22,7 +21,7 @@ using VRage.Utils;
 namespace Sandbox.Game.Entities.Blocks
 {
     [MyCubeBlockType(typeof(MyObjectBuilder_SolarPanel))]
-    class MySolarPanel : MyTerminalBlock, IMyPowerProducer, IMySolarPanel
+    class MySolarPanel : MyTerminalBlock, IMyPowerProducer, Sandbox.ModAPI.Ingame.IMySolarPanel
     {
         static string[] m_emissiveNames = new string[] { "Emissive0", "Emissive1", "Emissive2", "Emissive3" };
 
@@ -74,6 +73,11 @@ namespace Sandbox.Game.Entities.Blocks
                         MaxPowerOutputChanged(this);
                 }
             }
+        }
+
+        float ModAPI.Ingame.IMyPowerProducer.DefinedPowerOutput
+        {
+            get { return m_solarPanelDefinition.MaxPowerOutput; }
         }
 
         private void UpdateDisplay()
@@ -148,7 +152,7 @@ namespace Sandbox.Game.Entities.Blocks
             }
         }
 
-       
+
 
         public override void UpdateBeforeSimulation100()
         {

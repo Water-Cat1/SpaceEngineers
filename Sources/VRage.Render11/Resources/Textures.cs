@@ -18,6 +18,7 @@ using SharpDX.Direct3D;
 using VRage.Utils;
 using VRage.Library.Utils;
 using VRage.FileSystem;
+using VRageMath;
 
 namespace VRageRender.Resources
 {
@@ -159,9 +160,8 @@ namespace VRageRender.Resources
                 }
             }
 
-            if(img != null)
-            {
-                
+            if (img != null && MathHelper.IsPowerOfTwo(img.Description.Width) && MathHelper.IsPowerOfTwo(img.Description.Height))
+            {         
                 int skipMipmaps = (Textures.Data[texId.Index].Type != MyTextureEnum.GUI && img.Description.MipLevels > 1) ? MyRender11.RenderSettings.TextureQuality.MipmapsToSkip(img.Description.Width, img.Description.Height) : 0;
 
                 int targetMipmaps = img.Description.MipLevels - skipMipmaps;
@@ -242,7 +242,7 @@ namespace VRageRender.Resources
 
         internal static ShaderResourceView GetView(TexId tex)
         {
-            return Views[tex.Index];
+            return tex != TexId.NULL ? Views[tex.Index] : null;
         }
 
         internal static TexId GetTexture(string path, MyTextureEnum type, bool waitTillLoaded = false)
@@ -334,8 +334,6 @@ namespace VRageRender.Resources
             var texId = TexId.NULL;
             if (NameIndex.TryGetValue(nameKey, out texId))
                 UnloadResources(texId);
-            else
-                Debug.Fail("Resource not found");
         }
 
         internal static void RemoveTextures(Func<TexId, bool> filter)
@@ -932,6 +930,31 @@ namespace VRageRender.Resources
 
             Srvs[handle] = new MySrvInfo { Description = null, View = new ShaderResourceView(MyRender11.Device, Textures.Data[handle.Index].Resource) };
             Uavs[handle] = new MyUavInfo { Description = null, View = new UnorderedAccessView(MyRender11.Device, Textures.Data[handle.Index].Resource) };
+            Index.Add(handle);
+
+            return handle;
+        }
+
+        internal static RwTexId CreateScratch2D(int width, int height, Format resourceFormat, int samplesCount, int samplesQuality, string debugName = null)
+        {
+            var desc = new Texture2DDescription
+            {
+                ArraySize = 1,
+                BindFlags = BindFlags.ShaderResource,
+                CpuAccessFlags = CpuAccessFlags.None,
+                Format = resourceFormat,
+                MipLevels = 1,
+                Usage = ResourceUsage.Default,
+                Width = width,
+                Height = height,
+                SampleDescription = new SampleDescription(samplesCount, samplesQuality)
+            };
+
+            var handle = new RwTexId { Index = Textures.Allocate() };
+            Textures.Data[handle.Index] = new MyRwTextureInfo { Description2D = desc };
+            Textures.Data[handle.Index].Resource = new Texture2D(MyRender11.Device, desc);
+
+            Srvs[handle] = new MySrvInfo { Description = null, View = new ShaderResourceView(MyRender11.Device, Textures.Data[handle.Index].Resource) };
             Index.Add(handle);
 
             return handle;

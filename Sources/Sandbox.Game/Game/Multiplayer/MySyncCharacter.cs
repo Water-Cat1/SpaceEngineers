@@ -94,14 +94,14 @@ namespace Sandbox.Game.Multiplayer
         [ProtoContract]
         struct SwitchCharacterModelMsg : IEntityMessage
         {
-            [ProtoMember(1)]
+            [ProtoMember]
             public long CharacterEntityId;
             public long GetEntityId() { return CharacterEntityId; }
 
-            [ProtoMember(2)]
+            [ProtoMember]
             public string Model;
 
-            [ProtoMember(3)]
+            [ProtoMember]
             public Vector3 ColorMaskHSV;
         }
 
@@ -124,21 +124,21 @@ namespace Sandbox.Game.Multiplayer
         [ProtoContract]
         struct AnimationCommandMsg : IEntityMessage
         {
-            [ProtoMember(1)]
+            [ProtoMember]
             public long CharacterEntityId;
             public long GetEntityId() { return CharacterEntityId; }
 
-            [ProtoMember(2)]
+            [ProtoMember]
             public string AnimationSubtypeName;
-            [ProtoMember(3)]
+            [ProtoMember]
             public bool Loop;
-            [ProtoMember(4)]
+            [ProtoMember]
             public MyPlayAnimationMode Mode;
-            [ProtoMember(5)]
+            [ProtoMember]
             public MyBonesArea Area;
-            [ProtoMember(6)]
+            [ProtoMember]
             public float BlendTime;
-            [ProtoMember(7)]
+            [ProtoMember]
             public float TimeScale;
         }
 
@@ -146,11 +146,11 @@ namespace Sandbox.Game.Multiplayer
         [ProtoContract]
         struct AttachToCockpitMsg : IEntityMessage
         {
-            [ProtoMember(1)]
+            [ProtoMember]
             public long CharacterEntityId;
             public long GetEntityId() { return CharacterEntityId; }
 
-            [ProtoMember(2)]
+            [ProtoMember]
             public long CockpitEntityId;
         }
 
@@ -176,12 +176,36 @@ namespace Sandbox.Game.Multiplayer
             public long EntityId;
             public long GetEntityId() { return EntityId; }
 
-            public int CueIdHash;
+            public MyStringId SoundId;
 
             public override string ToString()
             {
-                return String.Format("{0}, {1}", this.GetType().Name, this.CueIdHash);
+                return String.Format("{0}, {1}", this.GetType().Name, this.SoundId);
             }
+        }
+
+        [MessageId(7420, P2PMessageEnum.Unreliable)]
+        [ProtoContract]
+        struct RagdollTransformsMsg : IEntityMessage
+        {
+            [ProtoMember]
+            public long CharacterEntityId;
+            public long GetEntityId() { return CharacterEntityId; }
+
+            [ProtoMember]            
+            public int TransformsCount;
+
+            [ProtoMember]
+            public Vector3[] transformsPositions;
+
+            [ProtoMember]
+            public Quaternion[] transformsOrientations;
+
+            [ProtoMember]
+            public Quaternion worldOrientation;
+
+            [ProtoMember]
+            public Vector3 worldPosition;
         }
 
         static MySyncCharacter()
@@ -210,7 +234,54 @@ namespace Sandbox.Game.Multiplayer
             MySyncLayer.RegisterEntityMessage<MySyncCharacter, RefillFromBottleMsg>(OnRefillFromBottle, MyMessagePermissions.FromServer);
 
             MySyncLayer.RegisterEntityMessage<MySyncCharacter, PlaySecondarySoundMsg>(OnSecondarySoundPlay, MyMessagePermissions.ToServer | MyMessagePermissions.FromServer);
+
+            MySyncLayer.RegisterEntityMessage<MySyncCharacter, RagdollTransformsMsg>(OnRagdollTransformsUpdate, MyMessagePermissions.FromServer);
         }
+
+        private static void OnRagdollTransformsUpdate(MySyncCharacter syncObject, ref RagdollTransformsMsg message, MyNetworkClient sender)
+        {
+            if (syncObject.Entity.Physics == null) return;
+            if (syncObject.Entity.Physics.Ragdoll == null) return;
+            if (syncObject.Entity.RagdollMapper == null) return;
+            if (!syncObject.Entity.Physics.Ragdoll.IsAddedToWorld) return;
+            if (!syncObject.Entity.RagdollMapper.IsActive) return;
+            Debug.Assert(message.worldOrientation != null && message.worldOrientation != Quaternion.Zero, "Received invalid ragdoll orientation from server!");
+            Debug.Assert(message.worldPosition != null && message.worldPosition != Vector3.Zero, "Received invalid ragdoll orientation from server!");
+            Debug.Assert(message.transformsOrientations != null && message.transformsPositions != null, "Received empty ragdoll transformations from server!");
+            Debug.Assert(message.transformsPositions.Count() == message.TransformsCount && message.transformsOrientations.Count() == message.TransformsCount, "Received ragdoll data count doesn't match!");
+            Matrix worldMatrix = Matrix.CreateFromQuaternion(message.worldOrientation);
+            worldMatrix.Translation = message.worldPosition;
+            Matrix[] transforms = new Matrix[message.TransformsCount];
+                        
+            for (int i = 0; i < message.TransformsCount; ++i)
+            {
+                transforms[i] = Matrix.CreateFromQuaternion(message.transformsOrientations[i]);
+                transforms[i].Translation = message.transformsPositions[i];
+            }
+
+            syncObject.Entity.RagdollMapper.UpdateRigidBodiesTransformsSynced(message.TransformsCount, worldMatrix, transforms);
+        }
+
+        public void SendRagdollTransforms(Matrix world, Matrix[] localBodiesTransforms)
+        {
+            if (ResponsibleForUpdate(this))
+            {
+                var msg = new RagdollTransformsMsg();
+                msg.CharacterEntityId = Entity.EntityId;
+                msg.worldPosition = world.Translation;
+                msg.TransformsCount = localBodiesTransforms.Count();
+                msg.worldOrientation = Quaternion.CreateFromRotationMatrix(world.GetOrientation());
+                msg.transformsPositions = new Vector3[msg.TransformsCount];
+                msg.transformsOrientations = new Quaternion[msg.TransformsCount];
+                for (int i = 0; i < localBodiesTransforms.Count(); ++i )
+                {
+                    msg.transformsPositions[i] = localBodiesTransforms[i].Translation;
+                    msg.transformsOrientations[i] = Quaternion.CreateFromRotationMatrix(localBodiesTransforms[i].GetOrientation());
+                }
+                Sync.Layer.SendMessageToAll(ref msg);
+            }
+        }
+
 
         private ChangeHeadOrSpineMsg m_headMsg;
         private bool m_headDirty = false;
@@ -456,17 +527,17 @@ namespace Sandbox.Game.Multiplayer
         [MessageId(7610, P2PMessageEnum.Reliable)]
         struct SendPlayerMessageMsg : IEntityMessage
         {
-            [ProtoMember(1)]
+            [ProtoMember]
             public long CharacterEntityId;
             public long GetEntityId() { return CharacterEntityId; }
 
-            [ProtoMember(2)]
+            [ProtoMember]
             public ulong SenderSteamId;
-            [ProtoMember(3)]
+            [ProtoMember]
             public ulong ReceiverSteamId;
-            [ProtoMember(4)]
+            [ProtoMember]
             public string Text;
-            [ProtoMember(5)]
+            [ProtoMember]
             public long Timestamp;
         }
 
@@ -474,15 +545,15 @@ namespace Sandbox.Game.Multiplayer
         [MessageId(7611, P2PMessageEnum.Reliable)]
         struct SendNewFactionMessageMsg : IEntityMessage
         {
-            [ProtoMember(1)]
+            [ProtoMember]
             public long CharacterEntityId;
             public long GetEntityId() { return CharacterEntityId; }
 
-            [ProtoMember(2)]
+            [ProtoMember]
             public long FactionId1;
-            [ProtoMember(3)]
+            [ProtoMember]
             public long FactionId2;
-            [ProtoMember(4)]
+            [ProtoMember]
             public MyObjectBuilder_FactionChatItem ChatItem;
         }
 
@@ -490,21 +561,21 @@ namespace Sandbox.Game.Multiplayer
         [MessageId(7613, P2PMessageEnum.Reliable)]
         struct ConfirmFactionMessageMsg : IEntityMessage
         {
-            [ProtoMember(1)]
+            [ProtoMember]
             public long CharacterEntityId;
             public long GetEntityId() { return CharacterEntityId; }
          
-            [ProtoMember(2)]
+            [ProtoMember]
             public long FactionId1;
-            [ProtoMember(3)]
+            [ProtoMember]
             public long FactionId2;
-            [ProtoMember(4)]
+            [ProtoMember]
             public long OriginalSenderId;
-            [ProtoMember(5)]
+            [ProtoMember]
             public long ReceiverId;
-            [ProtoMember(6)]
+            [ProtoMember]
             public long Timestamp;
-            [ProtoMember(7)]
+            [ProtoMember]
             public string Text;
         }
 
@@ -512,13 +583,13 @@ namespace Sandbox.Game.Multiplayer
         [MessageId(7614, P2PMessageEnum.Reliable)]
         struct SendGlobalMessageMsg : IEntityMessage
         {
-            [ProtoMember(1)]
+            [ProtoMember]
             public long CharacterEntityId;
             public long GetEntityId() { return CharacterEntityId; }
 
-            [ProtoMember(2)]
+            [ProtoMember]
             public ulong SenderSteamId;
-            [ProtoMember(3)]
+            [ProtoMember]
             public string Text;
         }
 
@@ -912,12 +983,12 @@ namespace Sandbox.Game.Multiplayer
             }
         }
 
-        internal void PlaySecondarySound(int soundId)
+        internal void PlaySecondarySound(MyStringId soundId)
         {
             var msg = new PlaySecondarySoundMsg()
             {
                 EntityId = this.SyncedEntityId,
-                CueIdHash = soundId,
+                SoundId = soundId,
             };
 
             if (Sync.IsServer)
@@ -934,8 +1005,7 @@ namespace Sandbox.Game.Multiplayer
         {
             if (!MySandboxGame.IsDedicated)
             {
-                MyStringId soundId = MyStringId.TryGet(msg.CueIdHash);
-                syncObject.Entity.StartSecondarySound(soundId, sync: false);
+                syncObject.Entity.StartSecondarySound(msg.SoundId, sync: false);
             }
 
             if (Sync.IsServer)

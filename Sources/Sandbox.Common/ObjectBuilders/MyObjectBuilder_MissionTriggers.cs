@@ -11,10 +11,16 @@ namespace Sandbox.Common.ObjectBuilders
     //[MyObjectBuilderDefinition]
     public class MyObjectBuilder_MissionTriggers : MyObjectBuilder_Base
     {
-        [ProtoMember(1)]
+        [ProtoMember]
         public List<MyObjectBuilder_Trigger> WinTriggers =new List<MyObjectBuilder_Trigger>();
-        [ProtoMember(2)]
+        [ProtoMember]
         public List<MyObjectBuilder_Trigger> LoseTriggers =new List<MyObjectBuilder_Trigger>();
+        [ProtoMember]
+        public string message;
+        [ProtoMember]
+        public bool Won;
+        [ProtoMember]
+        public bool Lost;
 
     }
 }

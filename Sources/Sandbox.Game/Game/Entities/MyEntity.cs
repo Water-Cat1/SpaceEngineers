@@ -334,7 +334,12 @@ namespace Sandbox.Game.Entities
         public void RemoveFromGamePruningStructure()
         {
             MyGamePruningStructure.Remove(this);
-            foreach (var child in Hierarchy.Children) child.Entity.RemoveFromGamePruningStructure();
+
+            if (Hierarchy != null)
+            {
+                foreach (var child in Hierarchy.Children) 
+                    child.Entity.RemoveFromGamePruningStructure();
+            }
         }
 
         protected virtual bool CanBeAddedToRender()
@@ -787,100 +792,6 @@ namespace Sandbox.Game.Entities
         #region Entity events
 
         /// <summary>
-        /// Notifies sub dependent resources about entity change.
-        /// </summary>
-        /// <param name="source">Source of change-or-null if unknown.</param>
-        private void NotifyEntityChange(object source)
-        {
-            //Like to be Obsolete
-
-            {
-                var notifier = Physics;
-
-                if (notifier != null && notifier != source)
-                {
-                    notifier.OnWorldPositionChanged(source);
-                }
-            }
-
-            {
-                var notifier = this;
-
-                if (notifier != source)
-                {
-                    notifier.PositionComp.OnWorldPositionChanged(source);
-                }
-            }
-        }
-
-        ///// <summary>
-        ///// Called on some contact start with this entity.
-        ///// </summary>
-        ///// <param name="contactInfo">The contact info.</param>
-        //protected virtual void OnContactStart(MyContactEventInfo contactInfo)
-        //{
-        //    VRageRender.MyRenderProxy.GetRenderProfiler().StartProfilingBlock("MyEntity::OnContactStart");
-
-        //    if (this.m_physics.PlayCollisionCueEnabled)
-        //    {
-        //          MyAudio.Static.PlayCollisionCue(contactInfo, MyMaterialsConstants.MyMaterialCollisionType.Start);
-        //    }
-
-        //    if (MyMwcFinalBuildConstants.DrawCollisionSpotsInHud)
-        //    {
-        //        MyHud.DebugClearAndAddText(contactInfo.m_ContactPoint, new StringBuilder("COLLISION POINT"));
-        //    } 
-
-        //    VRageRender.MyRenderProxy.GetRenderProfiler().EndProfilingBlock();
-        //}
-
-        ///// <summary>
-        ///// Called on some contact end with this entity.
-        ///// </summary>
-        ///// <param name="contactInfo">The contact info.</param>
-        //protected virtual void OnContactEnd(MyContactEventInfo contactInfo)
-        //{
-        //    if (this.m_physics.PlayCollisionCueEnabled)
-        //    {
-        //          MyAudio.Static.PlayCollisionCue(contactInfo, MyMaterialsConstants.MyMaterialCollisionType.End);
-        //    }
-        //}
-
-        ///// <summary>
-        ///// Called when [contact touches] with this entity.
-        ///// </summary>
-        ///// <param name="contactInfo">The contact info.</param>
-        //protected virtual void OnContactTouch(MyContactEventInfo contactInfo)
-        //{
-        //    if (this.m_physics.PlayCollisionCueEnabled)
-        //    {
-        //          MyAudio.Static.PlayCollisionCue(contactInfo, MyMaterialsConstants.MyMaterialCollisionType.Touch);
-        //    }
-        //}
-
-        ///// <summary>
-        ///// Called when [contact] with entity.
-        ///// </summary>
-        ///// <param name="constraint">The constraint.</param>
-        ///// <returns></returns>
-        //protected virtual bool OnContact(ref MyRBSolverConstraint constraint)
-        //{
-        //    if (OnContactEvent != null)
-        //    {
-        //        OnContactEvent(constraint.GetOtherEntity(this));
-        //    }
-
-        //    return true;
-        //}
-
-        /// <summary>
-        /// Called when [deserialized].
-        /// </summary>
-        protected virtual void OnDeserialized()
-        {
-        }
-
-        /// <summary>
         /// Called when [activated] which for entity means that was added to scene.
         /// </summary>
         /// <param name="source">The source of activation.</param>
@@ -933,9 +844,12 @@ namespace Sandbox.Game.Entities
         {
             InScene = false;
 
-            foreach (var child in Hierarchy.Children)
+            if (Hierarchy != null)
             {
-                child.Entity.OnRemovedFromScene(source);
+                foreach (var child in Hierarchy.Children)
+                {
+                    child.Entity.OnRemovedFromScene(source);
+                }
             }
 
             MyEntities.UnregisterForUpdate(this);
@@ -976,21 +890,6 @@ namespace Sandbox.Game.Entities
             if (handler != null)
                 handler(this);
         }
-
-        #region Implementation of INotifyMemberChanged
-
-        /// <summary>
-        /// Called when [member changed].
-        /// </summary>
-        /// <param name="memberInfo">The member info.</param>
-        public void OnMemberChanged(MemberInfo memberInfo)
-        {
-            {
-                PositionComp.UpdateWorldMatrix(null);
-            }
-        }
-
-        #endregion
 
         #region Drawing, objectbuilder, init & close
 
@@ -1231,6 +1130,8 @@ namespace Sandbox.Game.Entities
 
             CallAndClearOnClose();
 
+			Components.Clear();
+
             Closed = true;
         }
 
@@ -1313,37 +1214,6 @@ namespace Sandbox.Game.Entities
         {
 
         }
-
-        /// <summary>
-        /// IsSelectable
-        /// </summary>
-        /// <returns></returns>
-        public virtual bool IsSelectable()
-        {
-            return MyEntities.IsSelectable(this);
-        }
-
-        /// <summary>
-        /// When selecting children component(this), ask weather it can be selected separately
-        /// without selecting and highlighting its parent
-        /// </summary>
-        /// <returns></returns>
-        public virtual bool IsSelectableAsChild()
-        {
-            return false;
-        }
-
-        /// <summary>
-        /// When selected parent component(this), ask weather its children components will be
-        /// selected and highlighted too
-        /// </summary>
-        /// <returns></returns>
-        public virtual bool IsSelectableParentOnly()
-        {
-            return false;
-        }
-
-
 
         /// <summary>
         /// Method is called defacto from Update, preparation fo Draw

@@ -386,6 +386,7 @@ namespace Sandbox.Game.Entities
         MyHudNotification m_blockNotAvailableNotification;
         MyHudNotification m_symmetryNotification;
         MyHudNotification m_pasteNotification;
+        MyHudNotification m_stationRotationNotification;
 
         private bool m_dynamicMode;
         internal bool DynamicMode
@@ -432,6 +433,8 @@ namespace Sandbox.Game.Entities
         private static MyHudNotification JoystickUnlimitedBuildingHint;
         private static MyHudNotification JoystickCompoundModeHint;
         private static MyHudNotification JoystickDynamicModeHint;
+
+        private MyHudNotification m_buildModeHint;
 
         #endregion
 
@@ -643,6 +646,8 @@ namespace Sandbox.Game.Entities
         {
             if (MyInput.Static.IsJoystickConnected() && MyFakes.ENABLE_CONTROLLER_HINTS)
             {
+                if (!IsBuildMode)
+                    MyHud.Notifications.Add(m_buildModeHint);
                 if (MySession.Static.CreativeMode)
                     MyHud.Notifications.Add(JoystickUnlimitedBuildingHint);
                 else
@@ -663,6 +668,7 @@ namespace Sandbox.Game.Entities
 
         private void DeactivateNotifications()
         {
+            MyHud.Notifications.Remove(m_buildModeHint);
             if (MySession.Static.CreativeMode)
             {
                 MyHud.Notifications.Remove(UnlimitedBuildingHint);
@@ -684,6 +690,7 @@ namespace Sandbox.Game.Entities
         {
             if (joystick)
             {
+                MyHud.Notifications.Remove(m_buildModeHint);
                 MyHud.Notifications.Add(JoystickRotationHint);
                 if (MyFakes.ENABLE_COMPOUND_BLOCKS)
                     MyHud.Notifications.Add(JoystickCompoundModeHint);
@@ -702,6 +709,9 @@ namespace Sandbox.Game.Entities
 
         private void DeactivateBuildModeNotifications()
         {
+            if (MyInput.Static.IsJoystickConnected() && IsActivated)
+                MyHud.Notifications.Add(m_buildModeHint);
+
             MyHud.Notifications.Remove(BlockRotationHint);
             MyHud.Notifications.Remove(JoystickRotationHint);
 
@@ -744,7 +754,8 @@ namespace Sandbox.Game.Entities
                 if (MyFakes.ENABLE_COMPOUND_BLOCKS)
                     CompoundModeHint = MyHudNotifications.CreateControlNotification(MySpaceTexts.NotificationCompoundBuildingFormat, compoundToggle, "ALT");
                 if (MyFakes.ENABLE_CUBE_BUILDER_DYNAMIC_MODE)
-                    DynamicModeHint = MyHudNotifications.CreateControlNotification(MySpaceTexts.NotificationSwitchBuildingModeFormat, buildingModeToggle); 
+                    DynamicModeHint = MyHudNotifications.CreateControlNotification(MySpaceTexts.NotificationSwitchBuildingModeFormat, buildingModeToggle);
+                m_buildModeHint = null;
             }
 
             // joystick notifications
@@ -754,16 +765,20 @@ namespace Sandbox.Game.Entities
 
                 var primaryActionCode = MyControllerHelper.GetCodeForControl(cx_char, MyControlsSpace.PRIMARY_TOOL_ACTION);
                 var secondaryActionCode = MyControllerHelper.GetCodeForControl(cx_char, MyControlsSpace.SECONDARY_TOOL_ACTION);
-                var rotateBlockCode = MyControllerHelper.GetCodeForControl(cx_build, MyControlsSpace.CUBE_ROTATE_HORISONTAL_POSITIVE);
+                var rotateBlockCode1 = MyControllerHelper.GetCodeForControl(cx_build, MyControlsSpace.CUBE_ROTATE_HORISONTAL_POSITIVE);
+                var rotateBlockCode2 = MyControllerHelper.GetCodeForControl(cx_build, MyControlsSpace.CUBE_ROTATE_HORISONTAL_NEGATIVE);
+                var rotateBlockCode3 = MyControllerHelper.GetCodeForControl(cx_build, MyControlsSpace.CUBE_ROTATE_VERTICAL_NEGATIVE);
+                var rotateBlockCode4 = MyControllerHelper.GetCodeForControl(cx_build, MyControlsSpace.CUBE_ROTATE_VERTICAL_POSITIVE);
                 var rotateBlockRollCode = MyControllerHelper.GetCodeForControl(cx_build, MyControlsSpace.CUBE_ROTATE_ROLL_POSITIVE);
                 var rotateBlockRollCode2 = MyControllerHelper.GetCodeForControl(cx_build, MyControlsSpace.CUBE_ROTATE_ROLL_NEGATIVE);
                 var dynamicModeCode = MyControllerHelper.GetCodeForControl(cx_build, MyControlsSpace.SWITCH_BUILDING_MODE);
                 var compoundCode = MyControllerHelper.GetCodeForControl(cx_build, MyControlsSpace.SWITCH_COMPOUND);
+                var buildModeCode = MyControllerHelper.GetCodeForControl(cx_char, MyControlsSpace.BUILD_MODE);
 
                 StringBuilder sb = new StringBuilder();
-                var rotation = new HashSet<char>() { rotateBlockCode, rotateBlockRollCode, rotateBlockRollCode2 };
+                var rotation = new HashSet<char>() { rotateBlockCode1, rotateBlockCode2, rotateBlockCode3, rotateBlockCode4, rotateBlockRollCode, rotateBlockRollCode2 };
                 foreach (var c in rotation)
-                    sb.Append(c).Append(" ");
+                    sb.Append(c);
 
                 JoystickRotationHint = MyHudNotifications.CreateControlNotification(MySpaceTexts.NotificationRotationFormatCombined, sb.ToString().Trim());
                 JoystickBuildingHint = MyHudNotifications.CreateControlNotification(MySpaceTexts.NotificationBuildingFormat, primaryActionCode);
@@ -772,11 +787,13 @@ namespace Sandbox.Game.Entities
                     JoystickCompoundModeHint = MyHudNotifications.CreateControlNotification(MySpaceTexts.NotificationJoystickCompoundBuildingFormat, compoundCode);
                 if (MyFakes.ENABLE_CUBE_BUILDER_DYNAMIC_MODE)
                     JoystickDynamicModeHint = MyHudNotifications.CreateControlNotification(MySpaceTexts.NotificationSwitchBuildingModeFormat, dynamicModeCode);
+                m_buildModeHint = MyHudNotifications.CreateControlNotification(MySpaceTexts.NotificationHintPressToOpenBuildMode, buildModeCode);
             }
         }
 
         public override void Deactivate()
         {
+            HideStationRotationNotification();
             DeactivateShipCreationClipboard();
             DeactivateCopyPaste();
             DeactivateCopyPasteFloatingObject();
@@ -958,6 +975,37 @@ namespace Sandbox.Game.Entities
             }
         }
 
+        private void ShowStationRotationNotification()
+        {
+            if (m_stationRotationNotification == null && m_shipCreationClipboard.EnableStationRotation)
+                m_stationRotationNotification = new MyHudNotification(MySpaceTexts.NotificationStationRotation, 0, priority: 1);
+
+            if (m_shipCreationClipboard.EnableStationRotation)
+            {
+                MyHud.Notifications.Add(m_stationRotationNotification);
+            }
+            else
+            {
+                MyHud.Notifications.Remove(m_stationRotationNotification);
+            }
+        }
+
+        private void HideStationRotationNotification()
+        {
+            if (m_stationRotationNotification != null)
+            {
+                MyHud.Notifications.Remove(m_stationRotationNotification);
+            }
+        }
+
+        public void EnableStationRotation()
+        {
+            m_shipCreationClipboard.EnableStationRotation = !m_shipCreationClipboard.EnableStationRotation;
+            m_clipboard.EnableStationRotation = !m_clipboard.EnableStationRotation;
+            m_floatingObjectClipboard.EnableStationRotation = !m_floatingObjectClipboard.EnableStationRotation;
+            ShowStationRotationNotification();     
+        }
+
         public bool HandleGameInput()
         {
             m_rotationHintRotating = false;
@@ -1005,6 +1053,11 @@ namespace Sandbox.Game.Entities
             if (IsActivated && MyControllerHelper.IsControl(context, MyControlsSpace.BUILD_MODE))
             {
                 IsBuildMode = !IsBuildMode;
+            }
+
+            if (MyInput.Static.IsNewGameControlPressed(MyControlsSpace.STATION_ROTATION) && (ShipCreationIsActivated || CopyPasteIsActivated))
+            {
+                EnableStationRotation();
             }
 
             // When spectator active, building is instant
@@ -1095,6 +1148,7 @@ namespace Sandbox.Game.Entities
                     if (MyInput.Static.IsNewKeyPressed(MyKeys.V) && MyInput.Static.IsAnyCtrlKeyPressed() && !MyInput.Static.IsAnyShiftKeyPressed())
                     {
                         DeactivateBlockCreation();
+                        ShowStationRotationNotification();
                         if (m_clipboard.PasteGrid())
                         {
                             UpdatePasteNotification(MySpaceTexts.CubeBuilderPasteNotification);
@@ -1124,6 +1178,7 @@ namespace Sandbox.Game.Entities
                 {
                     if (m_clipboard.IsActive)
                     {
+                        HideStationRotationNotification();
                         m_clipboard.Deactivate();
                         UpdatePasteNotification(MySpaceTexts.CubeBuilderPasteNotification);
                         return true;
@@ -1145,6 +1200,7 @@ namespace Sandbox.Game.Entities
 
                     if (m_shipCreationClipboard.IsActive)
                     {
+                        HideStationRotationNotification();
                         m_shipCreationClipboard.Deactivate();
                         UpdatePasteNotification(MySpaceTexts.CubeBuilderPasteNotification);
                         return true;
@@ -1176,12 +1232,13 @@ namespace Sandbox.Game.Entities
                     }
                 }
 
-                if (MyControllerHelper.IsControl(context, MyControlsSpace.PRIMARY_TOOL_ACTION))
+                if (MyInput.Static.IsNewLeftMousePressed() || MyControllerHelper.IsControl(context, MyControlsSpace.COPY_PASTE_ACTION))
                 {
                     if (m_clipboard.IsActive)
                     {
                         if (m_clipboard.PasteGrid())
                         {
+                            HideStationRotationNotification();
                             UpdatePasteNotification(MySpaceTexts.CubeBuilderPasteNotification);
                             return true;
                         }
@@ -1209,6 +1266,7 @@ namespace Sandbox.Game.Entities
                     {
                         if (m_shipCreationClipboard.PasteGrid())
                         {
+                            HideStationRotationNotification();
                             MyGuiAudio.PlaySound(MyGuiSounds.HudPlaceBlock);
                             return true;
                         }
@@ -1424,8 +1482,7 @@ namespace Sandbox.Game.Entities
                         MyInput.Static.IsNewRightMouseReleased())
                     {
                         StopBuilding();
-                    }
-
+                    }               
                 } //if (CurrentGrid != null)
                 else if (CurrentVoxelMap != null)
                 {
@@ -1571,7 +1628,7 @@ namespace Sandbox.Game.Entities
                     foreach (var gizmoSpace in m_gizmo.Spaces)
                     {
                         if (gizmoSpace.m_removeBlock != null)
-                            MyToolbar.ColorMaskHSV = gizmoSpace.m_removeBlock.ColorMaskHSV;
+                            MyToolbar.AddOrSwitchToColor(gizmoSpace.m_removeBlock.ColorMaskHSV);
                     }
                 }
             }
@@ -1583,44 +1640,47 @@ namespace Sandbox.Game.Entities
                 Change(expand);
             }
 
-            for (int i = 0; i < 6; ++i)
+            if (IsActivated)
             {
-                bool standardRotation = MyControllerHelper.IsControl(context, m_rotationControls[i], MyControlStateType.PRESSED);
-                if (standardRotation)
+                for (int i = 0; i < 6; ++i)
                 {
-                    bool newStandardPress = MyControllerHelper.IsControl(context, m_rotationControls[i], MyControlStateType.NEW_PRESSED);
-                    bool newPress = newStandardPress;
-
-                    int axis = -1;
-                    int direction = m_rotationDirections[i];
-
-                    if (MyFakes.ENABLE_STANDARD_AXES_ROTATION)
+                    bool standardRotation = MyControllerHelper.IsControl(context, m_rotationControls[i], MyControlStateType.PRESSED);
+                    if (standardRotation)
                     {
-                        axis = GetStandardRotationAxisAndDirection(i, ref direction);
-                    }
-                    else
-                    {
-                        if (i < 2)
-                        {
-                            axis = m_rotationHints.RotationUpAxis;
-                            direction *= m_rotationHints.RotationUpDirection;
-                        }
-                        if (i >= 2 && i < 4)
-                        {
-                            axis = m_rotationHints.RotationRightAxis;
-                            direction *= m_rotationHints.RotationRightDirection;
-                        }
-                        if (i >= 4)
-                        {
-                            axis = m_rotationHints.RotationForwardAxis;
-                            direction *= m_rotationHints.RotationForwardDirection;
-                        }
-                    }
+                        bool newStandardPress = MyControllerHelper.IsControl(context, m_rotationControls[i], MyControlStateType.NEW_PRESSED);
+                        bool newPress = newStandardPress;
 
-                    if (axis != -1)
-                    {
-                        m_rotationHintRotating |= !newPress;
-                        RotateAxis(axis, direction, newPress, frameDt);
+                        int axis = -1;
+                        int direction = m_rotationDirections[i];
+
+                        if (MyFakes.ENABLE_STANDARD_AXES_ROTATION)
+                        {
+                            axis = GetStandardRotationAxisAndDirection(i, ref direction);
+                        }
+                        else
+                        {
+                            if (i < 2)
+                            {
+                                axis = m_rotationHints.RotationUpAxis;
+                                direction *= m_rotationHints.RotationUpDirection;
+                            }
+                            if (i >= 2 && i < 4)
+                            {
+                                axis = m_rotationHints.RotationRightAxis;
+                                direction *= m_rotationHints.RotationRightDirection;
+                            }
+                            if (i >= 4)
+                            {
+                                axis = m_rotationHints.RotationForwardAxis;
+                                direction *= m_rotationHints.RotationForwardDirection;
+                            }
+                        }
+
+                        if (axis != -1)
+                        {
+                            m_rotationHintRotating |= !newPress;
+                            RotateAxis(axis, direction, newPress, frameDt);
+                        }
                     }
                 }
             }
@@ -1920,9 +1980,18 @@ namespace Sandbox.Game.Entities
             RemoveSymmetryNotification();
 
             m_symmetryNotification = new MyHudNotification(myTextsWrapperEnum, 0, level: MyNotificationLevel.Control);
-            m_symmetryNotification.SetTextFormatArguments(
-                MyInput.Static.GetGameControl(MyControlsSpace.PRIMARY_TOOL_ACTION),
-                MyInput.Static.GetGameControl(MyControlsSpace.SECONDARY_TOOL_ACTION));
+            if (!MyInput.Static.IsJoystickConnected())
+            {
+                m_symmetryNotification.SetTextFormatArguments(
+                    MyInput.Static.GetGameControl(MyControlsSpace.PRIMARY_TOOL_ACTION),
+                    MyInput.Static.GetGameControl(MyControlsSpace.SECONDARY_TOOL_ACTION));
+            }
+            else
+            {
+                m_symmetryNotification.SetTextFormatArguments(
+                    MyControllerHelper.GetCodeForControl(MySpaceBindingCreator.CX_BUILD_MODE, MyControlsSpace.PRIMARY_TOOL_ACTION),
+                    MyControllerHelper.GetCodeForControl(MySpaceBindingCreator.CX_BUILD_MODE, MyControlsSpace.SECONDARY_BUILD_ACTION));
+            }
 
             MyHud.Notifications.Add(m_symmetryNotification);
         }
@@ -2008,6 +2077,14 @@ namespace Sandbox.Game.Entities
                 //    gizmoSpace.m_buildAllowed = false;
                 //    gizmoSpace.m_removeBlock = null;
                 //}
+
+                if (CameraControllerSpectator)
+                {
+                    gizmoSpace.m_showGizmoCube = false;
+                    gizmoSpace.m_buildAllowed = false;
+                    return;
+                }
+
                 if (!MySession.Static.SimpleSurvival && MySession.ControlledEntity is MyCharacter)
                 {
                     gizmoSpace.m_buildAllowed &= (MySession.ControlledEntity as MyCharacter).CanStartConstruction(CurrentBlockDefinition);
@@ -2129,7 +2206,7 @@ namespace Sandbox.Game.Entities
             {
                 BoundingBoxD gizmoBox = localAABB.Transform(ref drawMatrix);
 
-                if (!MyCubeBuilderGizmo.DefaultGizmoCloseEnough(ref MatrixD.Identity, gizmoBox, gridSize, IntersectionDistance) || MySession.GetCameraControllerEnum() == MyCameraControllerEnum.Spectator)
+                if (!MyCubeBuilderGizmo.DefaultGizmoCloseEnough(ref MatrixD.Identity, gizmoBox, gridSize, IntersectionDistance) || CameraControllerSpectator)
                 {
                     gizmoSpace.m_buildAllowed = false;
                     gizmoSpace.m_showGizmoCube = false;
@@ -2221,7 +2298,7 @@ namespace Sandbox.Game.Entities
                         Vector3 localMax = (m_gizmo.SpaceDefault.m_max + new Vector3(0.5f)) * CurrentGrid.GridSize;
                         BoundingBoxD gizmoBox = new BoundingBoxD(localMin, localMax);
 
-                        if (!MyCubeBuilderGizmo.DefaultGizmoCloseEnough(ref m_invGridWorldMatrix, gizmoBox, CurrentGrid.GridSize, IntersectionDistance) || MySession.GetCameraControllerEnum() == MyCameraControllerEnum.Spectator)
+                        if (!MyCubeBuilderGizmo.DefaultGizmoCloseEnough(ref m_invGridWorldMatrix, gizmoBox, CurrentGrid.GridSize, IntersectionDistance) || CameraControllerSpectator)
                         {
                             gizmoSpace.m_buildAllowed = false;
                             gizmoSpace.m_removeBlock = null;
@@ -2361,7 +2438,7 @@ namespace Sandbox.Game.Entities
                         {
                             MatrixD invDrawMatrix = Matrix.Invert(drawMatrix);
 
-                            if (!MyCubeBuilderGizmo.DefaultGizmoCloseEnough(ref invDrawMatrix, localAABB, gridSize, IntersectionDistance) || MySession.GetCameraControllerEnum() == MyCameraControllerEnum.Spectator)
+                            if (!MyCubeBuilderGizmo.DefaultGizmoCloseEnough(ref invDrawMatrix, localAABB, gridSize, IntersectionDistance) || CameraControllerSpectator)
                             {
                                 gizmoSpace.m_buildAllowed = false;
                                 gizmoSpace.m_removeBlock = null;
@@ -2481,7 +2558,7 @@ namespace Sandbox.Game.Entities
             }
             else
             {
-                if (MySession.Static.SurvivalMode && (MySession.GetCameraControllerEnum() != MyCameraControllerEnum.Spectator || MyFinalBuildConstants.IS_OFFICIAL))
+                if (MySession.Static.SurvivalMode && (!CameraControllerSpectator || MyFinalBuildConstants.IS_OFFICIAL))
                 {
                     Vector3 localMin = (m_gizmo.SpaceDefault.m_min - new Vector3(0.5f)) * CurrentGrid.GridSize;
                     Vector3 localMax = (m_gizmo.SpaceDefault.m_max + new Vector3(0.5f)) * CurrentGrid.GridSize;
@@ -3492,6 +3569,8 @@ namespace Sandbox.Game.Entities
             {
                 CurrentGrid.RazeBlocks(m_tmpBlockPositionList);
             }
+
+            HideStationRotationNotification();
         }
 
         // CH: At the time of writing this comment, this is not called anywhere (only one commented out occurence). If you want to use it, it's up to you to make it work :-)
@@ -3833,6 +3912,10 @@ namespace Sandbox.Game.Entities
 
             foreach (var gridBuilder in gridBuilders)
             {
+                if (gridBuilder.IsStatic && gridBuilder.PositionAndOrientation.HasValue)
+                {
+                    gridBuilder.PositionAndOrientation = MyPositionAndOrientation.Default;
+                }
                 foreach (var blockBuilder in gridBuilder.CubeBlocks)
                 {
                     blockBuilder.ColorMaskHSV = MyToolbar.ColorMaskHSV;
@@ -3840,6 +3923,15 @@ namespace Sandbox.Game.Entities
             }
 
             MyCubeBuilder.Static.ActivateShipCreationClipboard(gridBuilders, centerDisplacement, 5.0f + blockDiagonal.Length() * 0.5f);
+
+            if (isStatic)
+            {
+                ShowStationRotationNotification();
+            }
+            else
+            {
+                HideStationRotationNotification();
+            }
         }
 
         public void StartNewGridPlacement(MyCubeBlockDefinition blockDefinition, bool isStatic)
@@ -3975,6 +4067,11 @@ namespace Sandbox.Game.Entities
             blockBuilder.Orientation = Quaternion.CreateFromForwardUp(Vector3I.Round(worldMatrix.Forward), Vector3I.Round(worldMatrix.Up));
             Vector3I sizeRotated = Vector3I.Abs(Vector3I.Round(Vector3D.TransformNormal((Vector3)blockDefinition.Size, worldMatrix)));
             blockBuilder.Min = sizeRotated / 2 - sizeRotated + Vector3I.One;
+			if (MySession.Static.SurvivalMode && !MySession.Static.SimpleSurvival)
+			{
+				blockBuilder.IntegrityPercent = MyComponentStack.MOUNT_THRESHOLD;
+				blockBuilder.BuildPercent = MyComponentStack.MOUNT_THRESHOLD;
+			}
 
             gridBuilder.CubeBlocks.Add(blockBuilder);
 
@@ -3997,7 +4094,7 @@ namespace Sandbox.Game.Entities
 
                 if (MyFakes.ENABLE_SMALL_BLOCK_TO_LARGE_STATIC_CONNECTIONS)
                 {
-                    MyCubeGridSmallToLargeConnection.Static.CheckBlockSmallToLargeConnect(block);
+                    MyCubeGridSmallToLargeConnection.Static.AddBlockSmallToLargeConnection(block);
                 }
             }
             else

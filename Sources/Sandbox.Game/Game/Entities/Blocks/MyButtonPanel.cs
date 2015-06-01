@@ -44,14 +44,14 @@ namespace Sandbox.Game.Entities.Blocks
             [MessageIdAttribute(3317, P2PMessageEnum.Reliable)]
             protected struct ChangeToolbarItemMsg : IEntityMessage
             {
-                [ProtoMember(1)]
+                [ProtoMember]
                 public long EntityId;
                 public long GetEntityId() { return EntityId; }
 
-                [ProtoMember(2)]
+                [ProtoMember]
                 public ToolbarItem Item;
 
-                [ProtoMember(3)]
+                [ProtoMember]
                 public int Index;
             }
 
@@ -59,14 +59,14 @@ namespace Sandbox.Game.Entities.Blocks
             [MessageIdAttribute(3318, P2PMessageEnum.Reliable)]
             protected struct SetCustomButtonName : IEntityMessage
             {
-                [ProtoMember(1)]
+                [ProtoMember]
                 public long EntityId;
                 public long GetEntityId() { return EntityId; }
 
-                [ProtoMember(2)]
+                [ProtoMember]
                 public String CustomName;
 
-                [ProtoMember(3)]
+                [ProtoMember]
                 public int Index;
             }
 
@@ -172,32 +172,14 @@ namespace Sandbox.Game.Entities.Blocks
         }
 
         [ProtoContract]
-        struct ToolbarItem : IEqualityComparer<ToolbarItem>
+        struct ToolbarItem
         {
-            [ProtoMember(1)]
+            [ProtoMember]
             public long EntityID;
-            [ProtoMember(2)]
+            [ProtoMember]
             public string GroupName;
-            [ProtoMember(3)]
+            [ProtoMember]
             public string Action;
-
-            public bool Equals(ToolbarItem x, ToolbarItem y)
-            {
-                if (x.EntityID != y.EntityID || x.GroupName != y.GroupName || x.Action != y.Action)
-                    return false;
-                return true;
-            }
-
-            public int GetHashCode(ToolbarItem obj)
-            {
-                unchecked
-                {
-                    int result = obj.EntityID.GetHashCode();
-                    result = (result * 397) ^ obj.GroupName.GetHashCode();
-                    result = (result * 397) ^ obj.Action.GetHashCode();
-                    return result;
-                }
-            }
         }
 
         private const string DETECTOR_NAME = "panel";

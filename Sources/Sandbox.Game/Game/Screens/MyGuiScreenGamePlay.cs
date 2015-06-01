@@ -13,6 +13,7 @@ using Sandbox.Game.Multiplayer;
 using Sandbox.Game.Screens;
 using Sandbox.Game.Screens.Helpers;
 using Sandbox.Game.SessionComponents;
+using Sandbox.Game.VoiceChat;
 using Sandbox.Game.World;
 using Sandbox.Graphics;
 using Sandbox.Graphics.GUI;
@@ -183,7 +184,7 @@ namespace Sandbox.Game.Gui
         //  This method is called every update (but only if application has focus)
         public override void HandleUnhandledInput(bool receivedFocusInThisUpdate)
         {
-            if (MyInput.Static.ENABLE_DEVELOPER_KEYS || (MySession.Static != null && MySession.Static.Settings.EnableSpectator))
+            if (MyInput.Static.ENABLE_DEVELOPER_KEYS || (MySession.Static != null && MySession.Static.Settings.EnableSpectator) || (MyMultiplayer.Static != null && MySession.LocalHumanPlayer != null && MyMultiplayer.Static.IsAdmin(MySession.LocalHumanPlayer.Id.SteamId)))
             {
                 //Set camera to player
                 if (MyInput.Static.IsNewGameControlPressed(MyControlsSpace.SPECTATOR_NONE))
@@ -536,6 +537,18 @@ namespace Sandbox.Game.Gui
                         chatPos = MyGuiScreenHudBase.ConvertHudToNormalizedGuiPosition(ref chatPos);
                         MyGuiScreenChat chatScreen = new MyGuiScreenChat(chatPos);
                         MyGuiSandbox.AddScreen(chatScreen);
+                    }
+                }
+
+                if (MyPerGameSettings.VoiceChatEnabled)
+                {
+                    if (MyControllerHelper.IsControl(context, MyControlsSpace.VOICE_CHAT, MyControlStateType.NEW_PRESSED))
+                    {
+                        MyVoiceChatSessionComponent.Static.StartRecording();
+                    }
+                    else if (MyControllerHelper.IsControl(context, MyControlsSpace.VOICE_CHAT, MyControlStateType.NEW_RELEASED))
+                    {
+                        MyVoiceChatSessionComponent.Static.StopRecording();
                     }
                 }
             }
@@ -954,7 +967,8 @@ namespace Sandbox.Game.Gui
                 MySector.DistanceToSun,
                 MySector.SunProperties.SunMaterial,
                 MySector.DayTime,
-                MySector.ResetEyeAdaptation
+                MySector.ResetEyeAdaptation,
+                MyFakes.ENABLE_SUN_BILLBOARD
             );
             MySector.ResetEyeAdaptation = false;
             VRageRender.MyRenderProxy.UpdateEnvironmentMap();
