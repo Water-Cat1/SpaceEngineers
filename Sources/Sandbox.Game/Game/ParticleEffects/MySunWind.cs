@@ -33,6 +33,7 @@ namespace Sandbox.AppCode.Game.TransparentGeometry
     using Sandbox.Graphics.TransparentGeometry.Particles;
     using Sandbox.Common.ObjectBuilders.Definitions;
     using VRage;
+    using VRage.ModAPI;
 
 //  This class render "sun wind" coming from the sun. It works for sun in any direction (don't have to be parallel with one of the axis) - though I haven't tested it.
 //  There are large and small billboards. Large are because I don't want draw a lot of small billboards on edge, where player won't see anything. 
@@ -116,7 +117,7 @@ namespace Sandbox.AppCode.Game.TransparentGeometry
 
         //static MySoundCuesEnum? m_burningCue;
 
-        static List<Sandbox.ModAPI.IMyEntity> m_sunwindEntities = new List<Sandbox.ModAPI.IMyEntity>();
+        static List<IMyEntity> m_sunwindEntities = new List<IMyEntity>();
 
         static List<Havok.HkRigidBody> intersectionLst;
 
@@ -281,8 +282,10 @@ namespace Sandbox.AppCode.Game.TransparentGeometry
                         var grid = entity as MyCubeGrid;
                         var invMat = grid.PositionComp.GetWorldMatrixNormalizedInv();
 
-                        if (MySession.Static.DestructibleBlocks)
+                        if (grid.BlocksDestructionEnabled)
+                        {
                             grid.Physics.ApplyDeformation(6f, 3f, 3f, Vector3.Transform(p, invMat), Vector3.Normalize(Vector3.Transform(m_directionFromSunNormalized, invMat)), MyDamageType.Environment);
+                        }
 
                         //MyPhysics.HavokWorld.CastRay(l.From, l.To, m_hitLst);
                         //rayCount++;

@@ -56,6 +56,8 @@ namespace Sandbox.Game.Screens.DebugScreens
             AddCaption("Character kinematics debug draw", Color.Yellow.ToVector4());
             AddShareFocusHint();
 
+            AddCheckBox("Enable permanent IK/Ragdoll simulation ", null, MemberHelper.GetMember(() => MyFakes.ENABLE_PERMANENT_SIMULATIONS_COMPUTATION));
+
             AddCheckBox("Draw IK Settings ", null, MemberHelper.GetMember(() => MyDebugDrawSettings.DEBUG_DRAW_CHARACTER_IK_SETTINGS));
             AddCheckBox("Draw ankle final position", null, MemberHelper.GetMember(() => MyDebugDrawSettings.DEBUG_DRAW_CHARACTER_IK_ANKLE_FINALPOS));
             AddCheckBox("Draw raycast lines and foot lines", null, MemberHelper.GetMember(() => MyDebugDrawSettings.DEBUG_DRAW_CHARACTER_IK_RAYCASTLINE));
@@ -88,7 +90,7 @@ namespace Sandbox.Game.Screens.DebugScreens
             StringBuilder captionRagdollDynamic = new StringBuilder("Switch to Dynamic / Keyframed");
             AddButton(captionRagdollDynamic, switchRagdoll);
 
-            characterMovementStateCombo = AddCombo<Sandbox.Common.ObjectBuilders.MyCharacterMovementEnum>(null,  MemberHelper.GetMember(() => MyDebugDrawSettings.DEBUG_DRAW_CHARACTER_IK_MOVEMENT_STATE));
+            //characterMovementStateCombo = AddCombo<Sandbox.Common.ObjectBuilders.MyCharacterMovementEnum>(null,  MemberHelper.GetMember(() => MyDebugDrawSettings.DEBUG_DRAW_CHARACTER_IK_MOVEMENT_STATE));
             enabledIKState = AddCheckBox("Enable IK for this state", null, MemberHelper.GetMember(() => MyGuiScreenDebugCharacterKinematics.ikSettingsEnabled));
             belowReachableDistance = AddSlider("Reachable distance below character", 0f, 0f, 2f, null);           
             aboveReachableDistance = AddSlider("Reachable distance above character", 0f, 0f, 2f, null);
@@ -166,7 +168,7 @@ namespace Sandbox.Game.Screens.DebugScreens
 
         void RegisterEvents()
         {
-            characterMovementStateCombo.ItemSelected += characterMovementStateCombo_ItemSelected;
+            //characterMovementStateCombo.ItemSelected += characterMovementStateCombo_ItemSelected;
             belowReachableDistance.ValueChanged += ItemChanged;
             aboveReachableDistance.ValueChanged += ItemChanged;
             verticalChangeUpGain.ValueChanged += ItemChanged;

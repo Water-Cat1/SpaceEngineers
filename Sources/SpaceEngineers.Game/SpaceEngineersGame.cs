@@ -55,7 +55,7 @@ namespace SpaceEngineers.Game
                     {
                         Unit = MyGridPlacementSettings.PenetrationUnitEnum.Ratio,
                         MinAllowed = 0f,
-                        MaxAllowed = 0.2f,
+                        MaxAllowed = 0.1f,
                     },
                     EnablePreciseRotationWhenSnapped = false,
                 },
@@ -68,7 +68,7 @@ namespace SpaceEngineers.Game
                     {
                         Unit = MyGridPlacementSettings.PenetrationUnitEnum.Ratio,
                         MinAllowed = 0f,
-                        MaxAllowed = 0.33f,
+                        MaxAllowed = 0.8f,
                     },
                     EnablePreciseRotationWhenSnapped = true,
                 },
@@ -79,14 +79,13 @@ namespace SpaceEngineers.Game
             MyPerGameSettings.Destruction = false;
             MyPerGameSettings.ConstantVoxelAmbient = -0.35f;
             MyFakes.ENABLE_SUN_BILLBOARD = true;
+            MyFakes.ENABLE_PLANETS = true;
 
             MyPerGameSettings.BallFriendlyPhysics = true;
 
             MyPerGameSettings.EnableAi = false;
-            
 
             MyPerGameSettings.BotFactoryType = typeof(Sandbox.Game.AI.MySandboxBotFactory);
-            MyPerGameSettings.RespawnComponentType = typeof(Sandbox.Game.World.MyRespawnComponent);
 
             MyPerGameSettings.ControlMenuInitializerType = typeof(MySpaceControlMenuInitializer);
 

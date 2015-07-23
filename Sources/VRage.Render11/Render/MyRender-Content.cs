@@ -51,6 +51,7 @@ namespace VRageRender
             MyScreenDecals.Init();
             MyEnvProbeProcessing.Init();
             MyShadowsResolve.Init();
+            MyAtmosphereRenderer.Init();
             MyAAEdgeMarking.Init(); 
             MyScreenPass.Init();
             MyCopyToRT.Init();
@@ -78,10 +79,10 @@ namespace VRageRender
             MyMaterialShaders.OnDeviceReset();
             MyPipelineStates.OnDeviceReset();
             MyTextures.OnDeviceReset();
-            MyRwTextures.OnDeviceEnd();
+            MyRwTextures.OnDeviceReset();
             MyShadows.OnDeviceReset();
             MyBillboardRenderer.OnDeviceRestart();
-            MyScreenDecals.OnDeviceEnd();
+            MyScreenDecals.OnDeviceReset();
 
             MyMeshMaterials1.InvalidateMaterials();
             MyVoxelMaterials1.InvalidateMaterials();
@@ -151,7 +152,6 @@ namespace VRageRender
             
             MyTextures.OnSessionEnd();
             MyBigMeshTable.Table.OnSessionEnd();
-            MyScreenDecals.OnSessionEnd();
 
             //MyAssetsLoader.ClearMeshes();
         }

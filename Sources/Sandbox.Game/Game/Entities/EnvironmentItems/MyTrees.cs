@@ -4,25 +4,26 @@ using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using Havok;
-using Medieval.ObjectBuilders;
-using Medieval.ObjectBuilders.Definitions;
 using Sandbox.Common.ObjectBuilders;
 using Sandbox.Definitions;
 using Sandbox.Game.Entities;
-using VRage.Utils;
-using VRageMath;
+using Sandbox.Common;
 using Sandbox.Engine.Models;
 using Sandbox.Engine.Physics;
 using Sandbox.Engine.Utils;
-using Sandbox.Common;
 using Sandbox.Game;
 using Sandbox.Game.Entities.EnvironmentItems;
-using VRage.Library.Utils;
 using Sandbox.Game.Multiplayer;
 using Sandbox;
 using Sandbox.Common.ObjectBuilders.Definitions;
-using Sandbox.Graphics.TransparentGeometry.Particles;
 using Sandbox.Game.World;
+using Sandbox.Graphics.TransparentGeometry.Particles;
+using VRage.Library.Utils;
+using VRageMath;
+using VRage.Utils;
+using VRage.ObjectBuilders;
+using Sandbox.Game.GameSystems;
+using VRage;
 
 namespace Sandbox.Game.Entities.EnvironmentItems
 {
@@ -104,7 +105,14 @@ namespace Sandbox.Game.Entities.EnvironmentItems
             return;
         }
 
-        protected override void OnRemoveItem(int instanceId, ref Matrix matrix, MyStringId myStringId)
+		public static bool IsEntityFracturedTree(VRage.ModAPI.IMyEntity entity)
+		{
+			return (entity is MyFracturedPiece) && ((MyFracturedPiece)entity).OriginalBlocks != null && ((MyFracturedPiece)entity).OriginalBlocks.Count > 0
+				&& (((MyFracturedPiece)entity).OriginalBlocks[0].TypeId == typeof(MyObjectBuilder_Tree)
+				|| ((MyFracturedPiece)entity).OriginalBlocks[0].TypeId == typeof(MyObjectBuilder_DestroyableItem)) && ((MyFracturedPiece)entity).Physics != null;
+		}
+
+        protected override void OnRemoveItem(int instanceId, ref Matrix matrix, MyStringHash myStringId)
         {
             base.OnRemoveItem(instanceId, ref matrix, myStringId);
 
@@ -133,64 +141,81 @@ namespace Sandbox.Game.Entities.EnvironmentItems
                 var itemDefinition = MyDefinitionManager.Static.GetEnvironmentItemDefinition(id);
                 if (MyModels.GetModelOnlyData(itemDefinition.Model).HavokBreakableShapes != null)
                 {
-                    var breakableShape = MyModels.GetModelOnlyData(itemDefinition.Model).HavokBreakableShapes[0].Clone();
-                    MatrixD world = itemData.Transform.TransformMatrix;
-                    breakableShape.SetMassRecursively(500);
-                    breakableShape.SetStrenghtRecursively(5000, 0.7f);
+                     CreateBreakableShape(itemDefinition, ref itemData, ref hitWorldPosition, hitNormal, forceMultiplier);
+                }
+                else
+                {
+                    // This is for SE when you hit a tree, it will create a floating object with the same model. In case it affects ME, it may be changed. Contact DusanA for it.
+                    Debug.Assert(MyPerGameSettings.Game == GameEnum.SE_GAME);
+                    MyPhysicalInventoryItem Item = new MyPhysicalInventoryItem() { Amount = 1, Content = new MyObjectBuilder_TreeObject() { SubtypeName = itemData.SubtypeId.ToString() } };
+                    Vector3D pos = itemData.Transform.Position;
+                    Vector3D gravity = -MyGravityProviderSystem.CalculateGravityInPointForGrid(pos);
+                    gravity.Normalize();
 
-                    breakableShape.GetChildren(m_childrenTmp);
-
-                    var test = MyModels.GetModelOnlyData(itemDefinition.Model).HavokBreakableShapes;
-
-                    Vector3 hitLocalPosition = Vector3D.Transform(hitWorldPosition, MatrixD.Normalize(MatrixD.Invert(world)));
-                    float cutLocalYPosition = (float)(hitWorldPosition.Y - (double)itemData.Transform.Position.Y);
-                    List<HkdShapeInstanceInfo> childrenBelow = new List<HkdShapeInstanceInfo>();
-                    List<HkdShapeInstanceInfo> childrenAbove = new List<HkdShapeInstanceInfo>();
-                    HkdShapeInstanceInfo? stumpInstanceInfo = null;
-
-                    foreach (var shapeInst in m_childrenTmp)
-                    {
-                        // The first child shape in the breakable shape should be the stump!
-                        if (stumpInstanceInfo == null || shapeInst.CoM.Y < stumpInstanceInfo.Value.CoM.Y)
-                            stumpInstanceInfo = shapeInst;
-
-                        if (shapeInst.CoM.Y > cutLocalYPosition)
-                            childrenAbove.Add(shapeInst);
-                        else
-                            childrenBelow.Add(shapeInst);
-                    }
-
-                    // Resolve stump - if we have 2 children bellow then move one to above list
-                    if (childrenBelow.Count == 2)
-                    {
-                        if (childrenBelow[0].CoM.Y < childrenBelow[1].CoM.Y && cutLocalYPosition < childrenBelow[1].CoM.Y + 1.25f) 
-                        {
-                            childrenAbove.Insert(0, childrenBelow[1]);
-                            childrenBelow.RemoveAt(1);
-                        }
-                        else if (childrenBelow[0].CoM.Y > childrenBelow[1].CoM.Y && cutLocalYPosition < childrenBelow[0].CoM.Y + 1.25f)
-                        {
-                            childrenAbove.Insert(0, childrenBelow[0]);
-                            childrenBelow.RemoveAt(0);
-                        }
-                    }
-                    else if (childrenBelow.Count == 0)
-                    {
-                        if (childrenAbove.Remove(stumpInstanceInfo.Value))
-                            childrenBelow.Add(stumpInstanceInfo.Value);
-                        else
-                            Debug.Fail("Cannot remove shape instance from collection");
-                    }
-
-                    if (childrenBelow.Count > 0)
-                        CreateFracturePiece(itemDefinition, breakableShape, world, hitNormal, childrenBelow, forceMultiplier, true);
-
-                    if (childrenAbove.Count > 0)
-                        CreateFracturePiece(itemDefinition, breakableShape, world, hitNormal, childrenAbove, forceMultiplier, false);
-
-                    m_childrenTmp.Clear();
+                    MyFloatingObjects.Spawn(Item, pos + gravity, MyUtils.GetRandomPerpendicularVector(ref gravity), gravity);
                 }
             }
+            
+        }
+
+        private void CreateBreakableShape(MyEnvironmentItemDefinition itemDefinition, ref MyEnvironmentItemData itemData, ref Vector3D hitWorldPosition, Vector3 hitNormal, float forceMultiplier)
+        {
+            var breakableShape = MyModels.GetModelOnlyData(itemDefinition.Model).HavokBreakableShapes[0].Clone();
+            MatrixD world = itemData.Transform.TransformMatrix;
+            breakableShape.SetMassRecursively(500);
+            breakableShape.SetStrenghtRecursively(5000, 0.7f);
+
+            breakableShape.GetChildren(m_childrenTmp);
+
+            var test = MyModels.GetModelOnlyData(itemDefinition.Model).HavokBreakableShapes;
+
+            Vector3 hitLocalPosition = Vector3D.Transform(hitWorldPosition, MatrixD.Normalize(MatrixD.Invert(world)));
+            float cutLocalYPosition = (float)(hitWorldPosition.Y - (double)itemData.Transform.Position.Y);
+            List<HkdShapeInstanceInfo> childrenBelow = new List<HkdShapeInstanceInfo>();
+            List<HkdShapeInstanceInfo> childrenAbove = new List<HkdShapeInstanceInfo>();
+            HkdShapeInstanceInfo? stumpInstanceInfo = null;
+
+            foreach (var shapeInst in m_childrenTmp)
+            {
+                // The first child shape in the breakable shape should be the stump!
+                if (stumpInstanceInfo == null || shapeInst.CoM.Y < stumpInstanceInfo.Value.CoM.Y)
+                    stumpInstanceInfo = shapeInst;
+
+                if (shapeInst.CoM.Y > cutLocalYPosition)
+                    childrenAbove.Add(shapeInst);
+                else
+                    childrenBelow.Add(shapeInst);
+            }
+
+            // Resolve stump - if we have 2 children bellow then move one to above list
+            if (childrenBelow.Count == 2)
+            {
+                if (childrenBelow[0].CoM.Y < childrenBelow[1].CoM.Y && cutLocalYPosition < childrenBelow[1].CoM.Y + 1.25f)
+                {
+                    childrenAbove.Insert(0, childrenBelow[1]);
+                    childrenBelow.RemoveAt(1);
+                }
+                else if (childrenBelow[0].CoM.Y > childrenBelow[1].CoM.Y && cutLocalYPosition < childrenBelow[0].CoM.Y + 1.25f)
+                {
+                    childrenAbove.Insert(0, childrenBelow[0]);
+                    childrenBelow.RemoveAt(0);
+                }
+            }
+            else if (childrenBelow.Count == 0)
+            {
+                if (childrenAbove.Remove(stumpInstanceInfo.Value))
+                    childrenBelow.Add(stumpInstanceInfo.Value);
+                else
+                    Debug.Fail("Cannot remove shape instance from collection");
+            }
+
+            if (childrenBelow.Count > 0)
+                CreateFracturePiece(itemDefinition, breakableShape, world, hitNormal, childrenBelow, forceMultiplier, true);
+
+            if (childrenAbove.Count > 0)
+                CreateFracturePiece(itemDefinition, breakableShape, world, hitNormal, childrenAbove, forceMultiplier, false);
+
+            m_childrenTmp.Clear();
         }
 
         public static void CreateFracturePiece(MyEnvironmentItemDefinition itemDefinition, HkdBreakableShape oldBreakableShape, MatrixD worldMatrix, Vector3 hitNormal, List<HkdShapeInstanceInfo> shapeList,

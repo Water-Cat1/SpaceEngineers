@@ -22,12 +22,13 @@ using Sandbox.Graphics;
 using Sandbox.Definitions;
 using Sandbox.Game.GUI;
 using Sandbox.Game.Localization;
+using VRage.ObjectBuilders;
 
 #endregion
 
 namespace Sandbox.Game.Weapons
 {
-    abstract class MyBlockPlacerBase : MyEngineerToolBase
+    public abstract class MyBlockPlacerBase : MyEngineerToolBase
     {
         public static MyHudNotificationBase MissingComponentNotification =
              new MyHudNotification(MySpaceTexts.NotificationMissingComponentToPlaceBlockFormat, font: MyFontEnum.Red, priority: 1);
@@ -94,17 +95,14 @@ namespace Sandbox.Game.Weapons
                     return;
                 }
 
-                MyCharacter character = CharacterInventory.Owner as MyCharacter;
-                Debug.Assert(character != null, "Character inventory was not owned by a character");
-
-                if (character.ControllerInfo.IsRemotelyControlled())
+                if (!Owner.ControllerInfo.IsLocallyControlled())
                     return;
 
                 // Must have first component to start building
-                if (MyCubeBuilder.Static.CanStartConstruction(character))
+                if (MyCubeBuilder.Static.CanStartConstruction(Owner))
                 {
                     bool placingGrid = MyCubeBuilder.Static.ShipCreationClipboard.IsActive;
-                    m_closeAfterBuild = MyCubeBuilder.Static.AddConstruction(character) && placingGrid;
+                    m_closeAfterBuild = MyCubeBuilder.Static.AddConstruction(Owner) && placingGrid;
                     return;
                 }
                 else

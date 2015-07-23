@@ -39,9 +39,10 @@ namespace Sandbox.Game.Entities
     using Sandbox.Game.Localization;
     using Sandbox.ModAPI;
     using VRage.Audio;
+    using VRage.ModAPI;
 
     [MyCubeBlockType(typeof(MyObjectBuilder_Thrust))]
-    class MyThrust : MyFunctionalBlock, IMyThrust
+    public class MyThrust : MyFunctionalBlock, IMyThrust
     {
         public struct FlameInfo
         {
@@ -96,7 +97,7 @@ namespace Sandbox.Game.Entities
 
         private List<MyPhysics.HitInfo> m_gridRayCastLst;
         private List<HkRigidBody> m_flameCollisionsList;
-        private List<Sandbox.ModAPI.IMyEntity> m_damagedEntities;
+        private List<IMyEntity> m_damagedEntities;
 
         public bool IsPowered
         {
@@ -236,7 +237,7 @@ namespace Sandbox.Game.Entities
             Render.NeedsDrawFromParent = true;
             NeedsUpdate = MyEntityUpdateEnum.EACH_10TH_FRAME | MyEntityUpdateEnum.EACH_100TH_FRAME;
             m_flameCollisionsList = new List<HkRigidBody>();
-            m_damagedEntities = new List<Sandbox.ModAPI.IMyEntity>();
+            m_damagedEntities = new List<IMyEntity>();
             m_gridRayCastLst = new List<MyPhysics.HitInfo>();
             Render = new MyRenderComponentThrust();
             AddDebugRenderComponent(new MyDebugRenderComponentThrust(this));
@@ -382,9 +383,15 @@ namespace Sandbox.Game.Entities
                             m_damagedEntities.Add(entity);
 
                         if (entity is IMyDestroyableObject)
-                            (entity as IMyDestroyableObject).DoDamage(flameInfo.Radius * m_thrustDefinition.FlameDamage * 10, MyDamageType.Environment, true);
-                        else if (entity is MyCubeGrid && MySession.Static.DestructibleBlocks)
-                            DamageGrid(flameInfo, l, entity as MyCubeGrid);
+                            (entity as IMyDestroyableObject).DoDamage(flameInfo.Radius * m_thrustDefinition.FlameDamage * 10, MyDamageType.Environment, true, attackerId: EntityId);
+                        else if (entity is MyCubeGrid)
+                        {
+                            var grid = entity as MyCubeGrid;
+                            if (grid.BlocksDestructionEnabled)
+                            {
+                                DamageGrid(flameInfo, l, grid);
+                            }
+                        }
                     }
                     m_damagedEntities.Clear();
                     m_flameCollisionsList.Clear();
@@ -419,10 +426,13 @@ namespace Sandbox.Game.Entities
                     var gridDir = Vector3D.TransformNormal(l.Direction, invWorld);
                     if (block != null)
                         if (block.FatBlock != this && (CubeGrid.GridSizeEnum == MyCubeSize.Large || block.BlockDefinition.DeformationRatio > 0.25))
-                            block.DoDamage(30 * m_thrustDefinition.FlameDamage, MyDamageType.Environment);
+                        {
+                            block.DoDamage(30 * m_thrustDefinition.FlameDamage, MyDamageType.Environment, attackerId: EntityId);
+                        }
                     var areaPlanar = 0.5f * flameInfo.Radius * CubeGrid.GridSize;
                     var areaVertical = 0.5f * CubeGrid.GridSize;
-                    grid.Physics.ApplyDeformation(m_thrustDefinition.FlameDamage, areaPlanar, areaVertical, gridPos, gridDir, MyDamageType.Environment, CubeGrid.GridSizeEnum == MyCubeSize.Small ? 0.1f : 0);
+
+                    grid.Physics.ApplyDeformation(m_thrustDefinition.FlameDamage, areaPlanar, areaVertical, gridPos, gridDir, MyDamageType.Environment, CubeGrid.GridSizeEnum == MyCubeSize.Small ? 0.1f : 0, attackerId: EntityId);
                 }
             }
         }

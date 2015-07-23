@@ -17,13 +17,14 @@ using System.Diagnostics;
 using System.Linq;
 using VRage.Input;
 using VRageMath;
+using VRage.ObjectBuilders;
 
 #endregion
 
 namespace Sandbox.Game.Weapons
 {
     [MyEntityType(typeof(MyObjectBuilder_Welder))]
-    class MyWelder : MyEngineerToolBase
+    public class MyWelder : MyEngineerToolBase
     {
         private static MySoundPair IDLE_SOUND = new MySoundPair("ToolPlayWeldIdle");
         private static MySoundPair METAL_SOUND = new MySoundPair("ToolPlayWeldMetal");
@@ -68,7 +69,7 @@ namespace Sandbox.Game.Weapons
             SecondaryEffectId = MyParticleEffectsIDEnum.WelderSecondary;
             HasSecondaryEffect = false;
 
-            PhysicalObject = (MyObjectBuilder_PhysicalGunObject)Sandbox.Common.ObjectBuilders.Serializer.MyObjectBuilderSerializer.CreateNewObject(m_physicalItemId.TypeId, m_physicalItemId.SubtypeName);
+            PhysicalObject = (MyObjectBuilder_PhysicalGunObject)MyObjectBuilderSerializer.CreateNewObject(m_physicalItemId.TypeId, m_physicalItemId.SubtypeName);
         }
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
@@ -149,6 +150,7 @@ namespace Sandbox.Game.Weapons
             {
                 var info = block.ComponentStack.GetGroupInfo(i);
                 var component = new MyHudBlockInfo.ComponentInfo();
+                component.DefinitionId = info.Component.Id;
                 component.ComponentName = info.Component.DisplayNameText;
                 component.Icon = info.Component.Icon;
                 component.TotalCount = info.TotalCount;
@@ -266,13 +268,13 @@ namespace Sandbox.Game.Weapons
                     var info = FindProjectedBlock();
                     if (info.raycastResult == MyProjector.BuildCheckResult.OK)
                     {
-                        if (MySession.Static.CreativeMode || MyBlockBuilderBase.DeveloperSpectatorIsBuilding || Owner.CanStartConstruction(info.hitCube.BlockDefinition))
+                        if (MySession.Static.CreativeMode || MyBlockBuilderBase.SpectatorIsBuilding || Owner.CanStartConstruction(info.hitCube.BlockDefinition))
                         {
                             info.cubeProjector.Build(info.hitCube, Owner.ControllerInfo.Controller.Player.Identity.IdentityId, Owner.EntityId);
                         }
                         else
                         {
-                            MyCubePlacer.OnMissingComponents(info.hitCube.BlockDefinition);
+                            MyBlockPlacerBase.OnMissingComponents(info.hitCube.BlockDefinition);
                         }
                     }
                 }
@@ -367,7 +369,7 @@ namespace Sandbox.Game.Weapons
             
             var targetDestroyable = GetTargetDestroyable();
             if(targetDestroyable is MyCharacter && Sync.IsServer)
-                targetDestroyable.DoDamage(20, MyDamageType.Drill, true);
+                targetDestroyable.DoDamage(20, MyDamageType.Weld, true, attackerId: EntityId);
         }
 
         public override void UpdateAfterSimulation()

@@ -30,16 +30,19 @@ using Sandbox.Game.Entities.Character;
 using VRage;
 using Sandbox.Game.Components;
 using VRage;
+using VRage.Components;
+using VRage.ModAPI;
+using VRage.ObjectBuilders;
 
 #endregion
 
 namespace Sandbox.Game.Entities
 {
-    public abstract partial class MyEntity
+    public partial class MyEntity
     {
         #region Fields
 
-        public MyComponentContainer Components { get; private set; }
+        public MyEntityComponentContainer Components { get; private set; }
 
         public string Name;
 
@@ -61,7 +64,7 @@ namespace Sandbox.Game.Entities
         {
             foreach (var child in this.Hierarchy.Children)
             {
-                child.Entity.DebugDraw();
+                child.Container.Entity.DebugDraw();
             }
 
             foreach (var render in m_debugRenderers)
@@ -82,13 +85,18 @@ namespace Sandbox.Game.Entities
             m_debugRenderers.Add(render);
         }
 
+        public void ClearDebugRenderComponents()
+        {
+            m_debugRenderers.Clear();
+        }
+
         //Rendering
         protected MyModel m_modelCollision;                       //  Collision model, used only for collisions
 
         //Space query structure
         public int GamePruningProxyId = MyConstants.PRUNING_PROXY_ID_UNITIALIZED;
+        public int TopMostPruningProxyId = MyConstants.PRUNING_PROXY_ID_UNITIALIZED;
         public int TargetPruningProxyId = MyConstants.PRUNING_PROXY_ID_UNITIALIZED;
-        public int SensablePruningProxyId = MyConstants.PRUNING_PROXY_ID_UNITIALIZED;
 
         #endregion
 
@@ -225,7 +233,7 @@ namespace Sandbox.Game.Entities
         /// <value>
         /// The parent.
         /// </value>
-        public MyEntity Parent { get { return m_hierarchy != null && m_hierarchy.Parent != null ? m_hierarchy.Parent.CurrentContainer.Entity as MyEntity : null; } private set { m_hierarchy.Parent = value.Components.Get<MyHierarchyComponentBase>(); } }
+        public MyEntity Parent { get { return m_hierarchy != null && m_hierarchy.Parent != null ? m_hierarchy.Parent.Container.Entity as MyEntity : null; } private set { m_hierarchy.Parent = value.Components.Get<MyHierarchyComponentBase>(); } }
 
         /// <summary>
         /// Return top most parent of this entity
@@ -321,14 +329,14 @@ namespace Sandbox.Game.Entities
         public void UpdateGamePruningStructure()
         {
             MyGamePruningStructure.Move(this);
-            foreach (var child in Hierarchy.Children) child.Entity.UpdateGamePruningStructure();
+            foreach (var child in Hierarchy.Children) child.Container.Entity.UpdateGamePruningStructure();
         }
 
         public void AddToGamePruningStructure()
         {
             MyGamePruningStructure.Add(this);
             foreach (var child in Hierarchy.Children)
-                child.Entity.AddToGamePruningStructure();
+                child.Container.Entity.AddToGamePruningStructure();
         }
 
         public void RemoveFromGamePruningStructure()
@@ -337,8 +345,8 @@ namespace Sandbox.Game.Entities
 
             if (Hierarchy != null)
             {
-                foreach (var child in Hierarchy.Children) 
-                    child.Entity.RemoveFromGamePruningStructure();
+                foreach (var child in Hierarchy.Children)
+                    child.Container.Entity.RemoveFromGamePruningStructure();
             }
         }
 
@@ -397,12 +405,17 @@ namespace Sandbox.Game.Entities
 
         //public StackTrace CreationStack = new StackTrace(true);
 
+        public MyEntity()
+            : this(true)
+        {
+        }
+
         /// <summary>
         /// Initializes a new instance of the <see cref="MyEntity"/> class.
         /// </summary>
-        protected MyEntity(bool initComponents = true)
+        public MyEntity(bool initComponents = true)
         {
-            Components = new MyComponentContainer(this);
+            Components = new MyEntityComponentContainer(this);
             Components.ComponentAdded += Components_ComponentAdded;
             Components.ComponentRemoved += Components_ComponentRemoved;
 
@@ -427,7 +440,7 @@ namespace Sandbox.Game.Entities
             }
         }
 
-        void Components_ComponentAdded(Type t, Sandbox.Common.Components.MyComponentBase c)
+        void Components_ComponentAdded(Type t, MyEntityComponentBase c)
         {
             if (t == typeof(MyPhysicsComponentBase))
                 m_physics = c as MyPhysicsBody;
@@ -445,7 +458,7 @@ namespace Sandbox.Game.Entities
             }
         }
 
-        void Components_ComponentRemoved(Type t, Sandbox.Common.Components.MyComponentBase c)
+        void Components_ComponentRemoved(Type t, MyEntityComponentBase c)
         {
             if (t == typeof(MyPhysicsComponentBase))
                 m_physics = null;
@@ -617,7 +630,7 @@ namespace Sandbox.Game.Entities
         {
             foreach (var child in Hierarchy.Children)
             {
-                (child.Entity as MyEntity).DebugDrawPhysics();
+                (child.Container.Entity as MyEntity).DebugDrawPhysics();
             }
 
             if (this.m_physics == null)
@@ -825,15 +838,19 @@ namespace Sandbox.Game.Entities
             AddToGamePruningStructure();
             VRageRender.MyRenderProxy.GetRenderProfiler().EndProfilingBlock();
 
+            Components.OnAddedToScene();
 
             foreach (var child in Hierarchy.Children)
             {
-                child.Entity.OnAddedToScene(source);
+                child.Container.Entity.OnAddedToScene(source);
             }
 
             if (MyFakes.ENABLE_ASTEROID_FIELDS)
             {
-                Sandbox.Game.World.Generator.MyAsteroidCellGenerator.Static.TrackEntity(this);
+                if (Sandbox.Game.World.Generator.MyProceduralWorldGenerator.Static != null)
+                {
+                    Sandbox.Game.World.Generator.MyProceduralWorldGenerator.Static.TrackEntity(this);
+                }
             }
 
             VRageRender.MyRenderProxy.GetRenderProfiler().EndProfilingBlock();
@@ -848,9 +865,11 @@ namespace Sandbox.Game.Entities
             {
                 foreach (var child in Hierarchy.Children)
                 {
-                    child.Entity.OnRemovedFromScene(source);
+                    child.Container.Entity.OnRemovedFromScene(source);
                 }
             }
+
+            Components.OnRemovedFromScene();
 
             MyEntities.UnregisterForUpdate(this);
             MyEntities.UnregisterForDraw(this);
@@ -896,6 +915,8 @@ namespace Sandbox.Game.Entities
         public virtual void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
             ProfilerShort.Begin("MyEntity.Init(objectBuilder)");
+            MarkedForClose = false;
+            Closed = false;
             this.Render.PersistentFlags = MyPersistentEntityFlags2.CastShadows;
             if (objectBuilder != null)
             {
@@ -917,6 +938,8 @@ namespace Sandbox.Game.Entities
                     this.EntityId = objectBuilder.EntityId;
                 this.Name = objectBuilder.Name;
                 this.Render.PersistentFlags = objectBuilder.PersistentFlags;
+
+                this.Components.Deserialize(objectBuilder.ComponentContainer);
             }
 
             AllocateEntityID();
@@ -968,6 +991,8 @@ namespace Sandbox.Game.Entities
                          string modelCollision = null)
         {
             ProfilerShort.Begin("MyEntity.Init(...models...)");
+            MarkedForClose = false;
+            Closed = false;
             this.Render.PersistentFlags = MyPersistentEntityFlags2.CastShadows;
             this.DisplayName = displayName != null ? displayName.ToString() : null;
 
@@ -1083,7 +1108,7 @@ namespace Sandbox.Game.Entities
                 MyHierarchyComponentBase compToRemove = Hierarchy.Children[Hierarchy.Children.Count - 1];
                 Debug.Assert(compToRemove.Parent != null, "Entity has no parent but is part of children collection");
 
-                compToRemove.Entity.Delete();
+                compToRemove.Container.Entity.Delete();
 
                 Hierarchy.Children.Remove(compToRemove);
             }
@@ -1131,6 +1156,8 @@ namespace Sandbox.Game.Entities
             CallAndClearOnClose();
 
 			Components.Clear();
+
+            ClearDebugRenderComponents();
 
             Closed = true;
         }
@@ -1203,6 +1230,8 @@ namespace Sandbox.Game.Entities
 
                 objBuilder.Name = this.Name;
                 objBuilder.PersistentFlags = Render.PersistentFlags;
+
+                objBuilder.ComponentContainer = Components.Serialize();
             }
             return objBuilder;
         }

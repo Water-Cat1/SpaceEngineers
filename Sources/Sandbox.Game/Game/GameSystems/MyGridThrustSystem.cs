@@ -18,10 +18,11 @@ using Sandbox.Game.Entities.Cube;
 using Sandbox.Graphics;
 using Sandbox.Common;
 using VRage;
+using VRage.Components;
 
 namespace Sandbox.Game.GameSystems
 {
-    class MyGridThrustSystem : IMyPowerConsumer
+    public class MyGridThrustSystem : IMyPowerConsumer
     {
         private class DirectionComparer : IEqualityComparer<Vector3I>
         {
@@ -85,6 +86,8 @@ namespace Sandbox.Game.GameSystems
         /// Thrust wanted by AutoPilot
         /// </summary>
         public Vector3 AutoPilotThrust;
+
+        public bool AutopilotEnabled;
 
         public bool IsPowered
         {
@@ -263,12 +266,22 @@ namespace Sandbox.Game.GameSystems
 
         public Vector3 ComputeAiThrust(Vector3 direction)
         {
+            Matrix invWorldRot = m_grid.PositionComp.GetWorldMatrixNormalizedInv().GetOrientation();
+
             Vector3 positiveControl = Vector3.Clamp(direction, Vector3.Zero, Vector3.One);
             Vector3 negativeControl = Vector3.Clamp(direction, -Vector3.One, Vector3.Zero);
 
-            Vector3 maxPositiveControl = m_maxPositiveThrust * positiveControl;
-            Vector3 maxNegativeControl = m_maxNegativeThrust * -negativeControl;
+            Vector3 positiveGravity = Vector3.Clamp(-Vector3.Transform(m_grid.Physics.Gravity, ref invWorldRot) * m_grid.Physics.Mass, Vector3.Zero, Vector3.PositiveInfinity);
+            Vector3 negativeGravity = Vector3.Clamp(-Vector3.Transform(m_grid.Physics.Gravity, ref invWorldRot) * m_grid.Physics.Mass, Vector3.NegativeInfinity, Vector3.Zero);
+
+            Vector3 maxPositiveThrustWithGravity = Vector3.Clamp((m_maxPositiveThrust - positiveGravity), Vector3.Zero, Vector3.PositiveInfinity);
+            Vector3 maxNegativeThrustWithGravity = Vector3.Clamp((m_maxNegativeThrust + negativeGravity), Vector3.Zero, Vector3.PositiveInfinity);
+
+            Vector3 maxPositiveControl = maxPositiveThrustWithGravity * positiveControl;
+            Vector3 maxNegativeControl = maxNegativeThrustWithGravity * -negativeControl;
             
+            
+
             float max = Math.Max(maxPositiveControl.Max(), maxNegativeControl.Max());
 
             Vector3 thrust = Vector3.Zero;
@@ -277,8 +290,8 @@ namespace Sandbox.Game.GameSystems
                 Vector3 optimalPositive = positiveControl * max;
                 Vector3 optimalNegative = -negativeControl * max;
 
-                Vector3 optimalPositiveRatio = m_maxPositiveThrust / optimalPositive;
-                Vector3 optimalNegativeRatio = m_maxNegativeThrust / optimalNegative;
+                Vector3 optimalPositiveRatio = maxPositiveThrustWithGravity / optimalPositive;
+                Vector3 optimalNegativeRatio = maxNegativeThrustWithGravity / optimalNegative;
 
                 FlipNegativeInfinity(ref optimalPositiveRatio);
                 FlipNegativeInfinity(ref optimalNegativeRatio);
@@ -289,12 +302,12 @@ namespace Sandbox.Game.GameSystems
                     min = 1.0f;
 
                 thrust = -optimalNegative * min + optimalPositive * min;
+                thrust += positiveGravity + negativeGravity;
                 thrust = Vector3.Clamp(thrust, -m_maxNegativeThrust, m_maxPositiveThrust);
             }
 
             const float STOPPING_TIME = 0.5f;
-            Matrix invWorldRot = m_grid.PositionComp.GetWorldMatrixNormalizedInv().GetOrientation();
-            Vector3 localVelocity = Vector3.Transform(m_grid.Physics.LinearVelocity, ref invWorldRot);
+            Vector3 localVelocity = Vector3.Transform(m_grid.Physics.LinearVelocity + m_grid.Physics.Gravity / 2.0f, ref invWorldRot);
             Vector3 slowdownControl = Vector3.IsZeroVector(direction, 0.001f);
             var slowdownAcceleration = -localVelocity / STOPPING_TIME;
             var slowdownThrust = slowdownAcceleration * m_grid.Physics.Mass * slowdownControl;
@@ -380,7 +393,7 @@ namespace Sandbox.Game.GameSystems
         private void UpdateThrusts()
         {
             Vector3 thrust;
-            if (AutoPilotThrust != Vector3.Zero)
+            if (AutopilotEnabled)
             {
                 thrust = ComputeAiThrust(AutoPilotThrust);
             }
@@ -509,7 +522,7 @@ namespace Sandbox.Game.GameSystems
 
         private static bool IsOverridden(MyThrust thrust)
         {
-            return thrust.Enabled && thrust.IsFunctional && thrust.ThrustOverride > 0;
+            return thrust.Enabled && thrust.IsFunctional && thrust.ThrustOverride > 0 && !thrust.CubeGrid.GridSystems.ThrustSystem.AutopilotEnabled;
         }
 
         private static bool IsUsed(MyThrust thrust)

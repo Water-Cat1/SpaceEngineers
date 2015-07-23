@@ -8,8 +8,8 @@ using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Character;
 using Sandbox.Common;
 using Sandbox.Definitions;
-using Sandbox.Common.ObjectBuilders.Serializer;
 using System.Diagnostics;
+using VRage.ObjectBuilders;
 
 namespace Sandbox.Game.World
 {
@@ -47,13 +47,7 @@ namespace Sandbox.Game.World
             BackgroundTexture = "BackgroundCube";
         }
 
-        public static Vector3 DirectionToSunNormalized
-        {
-            get
-            {
-                return SunProperties.SunDirectionNormalized;
-            }
-        }
+        public static Vector3 DirectionToSunNormalized;
 
         public static float DistanceToSun;
         public static float DayTime;
@@ -83,6 +77,7 @@ namespace Sandbox.Game.World
                 FogProperties.FogColor = new Color(environmentBuilder.FogColor);
                 FogProperties.FogColor.A = 255;
             }
+            DirectionToSunNormalized = SunProperties.SunDirectionNormalized;
         }
 
         public static MyObjectBuilder_EnvironmentSettings GetEnvironmentSettings()

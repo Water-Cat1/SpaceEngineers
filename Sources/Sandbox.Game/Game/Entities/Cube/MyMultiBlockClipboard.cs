@@ -15,6 +15,8 @@ using Sandbox.Game.World;
 using Sandbox.Graphics;
 using VRageMath;
 using VRageRender;
+using VRage.ObjectBuilders;
+using VRage;
 
 namespace Sandbox.Game.Entities.Cube
 {
@@ -94,7 +96,7 @@ namespace Sandbox.Game.Entities.Cube
             }
         }
 
-        public override bool PasteGrid(MyInventory buildInventory = null, bool deactivate = true) 
+        public override bool PasteGrid(MyInventoryBase buildInventory = null, bool deactivate = true) 
         {
             if ((CopiedGrids.Count > 0) && !IsActive)
             {
@@ -129,7 +131,7 @@ namespace Sandbox.Game.Entities.Cube
 
         private static MyObjectBuilder_CubeGrid ConvertGridBuilderToStatic(MyObjectBuilder_CubeGrid originalGrid, MatrixD worldMatrix)
         {
-            var gridBuilder = Sandbox.Common.ObjectBuilders.Serializer.MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_CubeGrid>();
+            var gridBuilder = MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_CubeGrid>();
             gridBuilder.EntityId = originalGrid.EntityId;
             gridBuilder.PositionAndOrientation = new MyPositionAndOrientation(originalGrid.PositionAndOrientation.Value.Position, Vector3.Forward, Vector3.Up);
             gridBuilder.GridSizeEnum = originalGrid.GridSizeEnum;
@@ -172,7 +174,7 @@ namespace Sandbox.Game.Entities.Cube
             return gridBuilder;
         }
 
-        private bool PasteGridsInDynamicMode(MyInventory buildInventory, bool deactivate)
+        private bool PasteGridsInDynamicMode(MyInventoryBase buildInventory, bool deactivate)
         {
             bool result;
             // Remember static grid flag and set it to dynamic
@@ -192,7 +194,7 @@ namespace Sandbox.Game.Entities.Cube
             return result;
         }
 
-        private bool PasteGridsInStaticMode(MyInventory buildInventory, bool deactivate)
+        private bool PasteGridsInStaticMode(MyInventoryBase buildInventory, bool deactivate)
         {
             // Paste generates grid from builder and use matrix from preview
             List<MyObjectBuilder_CubeGrid> copiedGridsOrig = new List<MyObjectBuilder_CubeGrid>();
@@ -254,7 +256,7 @@ namespace Sandbox.Game.Entities.Cube
             if (blockDefinition == null)
                 return null;
 
-            var blockBuilder = Sandbox.Common.ObjectBuilders.Serializer.MyObjectBuilderSerializer.CreateNewObject(defId) as MyObjectBuilder_CubeBlock;
+            var blockBuilder = MyObjectBuilderSerializer.CreateNewObject(defId) as MyObjectBuilder_CubeBlock;
             blockBuilder.EntityId = origBlock.EntityId;
             // Orientation quaternion is not setup in origblock
             MyBlockOrientation orientation = origBlock.BlockOrientation;
@@ -352,6 +354,12 @@ namespace Sandbox.Game.Entities.Cube
             RemoveBlock = null;
             BlockIdInCompound = null;
             m_dynamicBuildAllowed = false;
+
+            if (MyFakes.ENABLE_BATTLE_SYSTEM && MySession.Static.Battle)
+            {
+                m_visible = false;
+                return;
+            }
 
             if (MyCubeBuilder.Static.DynamicMode)
             {
@@ -506,7 +514,7 @@ namespace Sandbox.Game.Entities.Cube
                 var grid = PreviewGrids[i];
                 var settings = m_settings.GetGridPlacementSettings(grid);
 
-                if (MySession.Static.SurvivalMode && !MyCubeBuilder.DeveloperSpectatorIsBuilding)
+                if (MySession.Static.SurvivalMode && !MyCubeBuilder.SpectatorIsBuilding)
                 {
                     if (i == 0 && MyCubeBuilder.CameraControllerSpectator)
                     {
@@ -524,7 +532,7 @@ namespace Sandbox.Game.Entities.Cube
                         }
                     }
 
-                    if (!MySession.Static.SimpleSurvival && MySession.ControlledEntity is MyCharacter)
+                    /*if (!MySession.Static.SimpleSurvival && MySession.ControlledEntity is MyCharacter)
                     {
                         foreach (var block in grid.GetBlocks())
                         {
@@ -537,7 +545,7 @@ namespace Sandbox.Game.Entities.Cube
                     if (i == 0 && MySession.Static.SimpleSurvival)
                     {
                         retval = retval && MyCubeBuilder.Static.CanBuildBlockSurvivalTime();
-                    }
+                    }*/
 
                     if (!retval)
                         return false;
@@ -555,6 +563,8 @@ namespace Sandbox.Game.Entities.Cube
                             Vector3 maxLocal = block.Max * PreviewGrids[i].GridSize + Vector3.Half * PreviewGrids[i].GridSize;
                             BoundingBoxD aabbLocal = new BoundingBoxD(minLocal, maxLocal);
                             retval = retval && MyCubeGrid.TestPlacementArea(grid, grid.IsStatic, ref settingsLocal, aabbLocal, true);
+                            if (!retval)
+                                break;
                         }
                     }
                 }
